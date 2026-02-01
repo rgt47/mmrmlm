@@ -1,0 +1,122 @@
+---
+title: "Donna B Project. A comparison of MMRM and LM for simple designs"
+author: "R.G. Thomas"
+date: "`r Sys.Date()`"
+fontsize: 11pt
+geometry: "left=3cm,right=3in,top=2cm,bottom=2cm"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+    number_sections: true
+    highlight: tango
+    keep_tex: true 
+    includes:
+      in_header: "~/shr/preamble.tex"
+header-includes:
+   - \rhead{Lab report}
+   - \fancyfoot[L]{\currfilename} %put current file in footer
+   - \setlength{\headheight}{13.59999pt}
+---
+
+<!-- your comment 
+\input{notes.tex}
+\hspace{4in}
+\fbox{
+\parbox{3in}{\Large 
+Notes: 
+\begin{itemize}
+\item a \\
+\item b  \\
+\end{itemize}
+}
+}
+-->
+
+```{r  include=FALSE, echo=F}
+rm(list = ls())
+options(
+  knitr.kable.NA = "", dplyr.summarise.inform = FALSE,
+  dplyr.print_max = 1e9, knitr.table.format = "latex"
+)
+library(pacman)
+p_load(skimr, janitor, kableExtra, tidyverse, knitr, lubridate, readxl)
+
+opts_chunk$set(
+  warning = F, message = F, echo = F, fig.width = 3.2,
+  fig.height = 3, results = "asis", dev = "pdf",
+  opts_chunk$set(cache.path = "cache/")
+)
+source("~/shr/zz.tools.R")
+options(scipen = 1, digits = 2)
+```
+
+<!-- your comment 
+\listoftodos
+\lipsum[2]
+\todo[inline, color=cyan]{The original todo note withouth changed colours.\newline Here's another line.}
+\begin{wrapfigure}{r}[.4\textwidth]{.4\textwidth}%
+\textit{\sffamily\normalsize\textcolor{gray!50}{
+Tornado plot: x-axis participants IDs y-axis study visits plot mean of cumulative
+AEs stratified by pre-covid and post-covid study visits (March 12 is
+the date we are using as a cut-point: through March 12 is pre-COVID,
+after March 12 is post-COVID) }}% 
+\end{wrapfigure}
+\lipsum[2]
+
+Sample reference section reference. @Pocock1975a
+
+\begin{marginfigure}
+\includegraphics[width=3in]{/Users/zenn/shr/images/sudoku-3d-cube.pdf} \caption{test}\label{fig:unnamed-chunk-8}
+\end{marginfigure}
+
+My most common usage of the todonotes package, is to insert an uncustomized
+todonotes somewhere in a latex document. An example of this usage is the command
+\todo{Make a cake \ldots},
+\lipsum[1]
+\todo[color=green]{Make a pie \ldots},
+\lipsum[1] 
+\todo{Make a joke \ldots},
+\listoftodos
+-->
+
+
+
+# Introduction
+
+The question arises as to whether in the case of two treatment groups and two
+timepoints does MMRM reduce exactly to ANCOVA.
+
+* Does if matter if the analysis is adjusting for baseline (i.e. not including
+  baseline in MMRM response.).
+
+* Does it matter if response is observed value or is a change score?
+Consider the article by Brogan and Kutner [@Brogan1980]
+
+\FloatBarrier
+
+# Methods
+
+Set up the model, no covariates,  in both settings with 3 observations per
+group. Work out analytic formula
+
+* Repeat for unequal variances
+
+* Repeat w covariates
+
+# Methods
+
+# Results
+# Code 
+
+<!-- your comment 
+```{r, attr.source='.numberLines', ref.label=knitr::all_labels(),echo=TRUE,eval=FALSE}
+```
+-->
+
+# References
+
+\bibliography{x24.bib}
+\bibliographystyle{plain}
+\nocite{*}
+
