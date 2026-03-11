@@ -1,7 +1,7 @@
 ---
 title: "A Comparison of MMRM and Linear Models for Simple Designs"
 author: "R.G. Thomas"
-date: "`r Sys.Date()`"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
 fontsize: 11pt
 geometry: "left=3cm,right=5cm,top=2cm,bottom=2cm"
 output:
@@ -18,6 +18,7 @@ header-includes:
    - \fancyfoot[L]{\currfilename} %put current file in footer
    - \setlength{\headheight}{13.59999pt}
 bibliography: references.bib
+csl: statistics-in-medicine.csl
 link-citations: true
 ---
 
