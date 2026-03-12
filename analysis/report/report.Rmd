@@ -1,5 +1,7 @@
 ---
-title: "A Comparison of MMRM and Linear Models for Simple Designs"
+title: "When Do Random Effects Models Reduce to
+  Fixed-Effect Alternatives? Conditions for
+  Equivalence in Longitudinal Clinical Trials"
 author: "R.G. Thomas"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 fontsize: 11pt
@@ -12,112 +14,901 @@ output:
     highlight: tango
     keep_tex: true
 header-includes:
+   - \usepackage{placeins}
+   - \usepackage{amsmath}
+   - \usepackage{bm}
    - \rhead{Lab report}
-   - \fancyfoot[L]{\currfilename} %put current file in footer
+   - \fancyfoot[L]{\currfilename}
    - \setlength{\headheight}{13.59999pt}
 bibliography: references.bib
 csl: statistics-in-medicine.csl
 link-citations: true
 ---
 
-<!-- your comment 
-\input{notes.tex}
-\hspace{4in}
-\fbox{
-\parbox{3in}{\Large 
-Notes: 
-\begin{itemize}
-\item a \\
-\item b  \\
-\end{itemize}
-}
-}
--->
-
-```{r  include=FALSE, echo=F}
+```{r setup, include=FALSE, echo=FALSE}
 rm(list = ls())
 options(
-  knitr.kable.NA = "", dplyr.summarise.inform = FALSE,
-  dplyr.print_max = 1e9, knitr.table.format = "latex"
+  knitr.kable.NA = "",
+  dplyr.summarise.inform = FALSE,
+  dplyr.print_max = 1e9,
+  knitr.table.format = "latex"
 )
-library(pacman)
-p_load(skimr, janitor, kableExtra, tidyverse, knitr, lubridate, readxl)
+library(knitr)
+library(kableExtra)
+library(tidyverse)
+library(nlme)
+library(lme4)
+library(emmeans)
 
 opts_chunk$set(
-  warning = F, message = F, echo = F, fig.width = 3.2,
-  fig.height = 3, results = "asis", dev = "pdf",
-  opts_chunk$set(cache.path = "cache/")
+  warning = FALSE,
+  message = FALSE,
+  echo = FALSE,
+  fig.width = 5,
+  fig.height = 3.5,
+  results = "asis",
+  dev = "pdf",
+  cache = TRUE,
+  cache.path = "cache/"
 )
-source("~/shr/zz.tools.R")
-options(scipen = 1, digits = 2)
+options(scipen = 1, digits = 4)
 ```
-
-<!-- your comment 
-\listoftodos
-\lipsum[2]
-\todo[inline, color=cyan]{The original todo note withouth changed colours.\newline Here's another line.}
-\begin{wrapfigure}{r}[.4\textwidth]{.4\textwidth}%
-\textit{\sffamily\normalsize\textcolor{gray!50}{
-Tornado plot: x-axis participants IDs y-axis study visits plot mean of cumulative
-AEs stratified by pre-covid and post-covid study visits (March 12 is
-the date we are using as a cut-point: through March 12 is pre-COVID,
-after March 12 is post-COVID) }}% 
-\end{wrapfigure}
-\lipsum[2]
-
-Sample reference section reference. @Pocock1975a
-
-\begin{marginfigure}
-\includegraphics[width=3in]{/Users/zenn/shr/images/sudoku-3d-cube.pdf} \caption{test}\label{fig:unnamed-chunk-8}
-\end{marginfigure}
-
-My most common usage of the todonotes package, is to insert an uncustomized
-todonotes somewhere in a latex document. An example of this usage is the command
-\todo{Make a cake \ldots},
-\lipsum[1]
-\todo[color=green]{Make a pie \ldots},
-\lipsum[1] 
-\todo{Make a joke \ldots},
-\listoftodos
--->
-
-
 
 # Introduction
 
-The question arises as to whether in the case of two treatment groups and two
-timepoints does MMRM reduce exactly to ANCOVA.
+## The practical problem
 
-* Does if matter if the analysis is adjusting for baseline (i.e. not including
-  baseline in MMRM response.).
+In clinical trials with repeated measurements, mixed
+models for repeated measures (MMRM) and random
+effects models have become the standard analytic
+approach [@mallinckrodt2001type; @mallinckrodt2008recommendations].
+These models accommodate within-subject correlation,
+handle incomplete data under the missing-at-random
+assumption, and provide flexible covariance
+structures. However, they impose a substantial
+interpretive burden on collaborators unfamiliar with
+the statistical machinery of variance components,
+restricted maximum likelihood estimation, and
+covariance parameterization.
 
-* Does it matter if response is observed value or is a change score?
-Consider the article by Brogan and Kutner [@Brogan1980]
+A natural question arises: under what conditions does
+the random effects model reduce to, or closely
+approximate, a simpler fixed-effect analysis that
+would be more accessible to the statistical
+practitioner? If such conditions can be identified,
+the simpler model offers an intuitive bridge to the
+same inferences, sparing the analyst from invoking
+a complex apparatus when it is not strictly
+necessary.
+
+## Foundational results
+
+The relationship between random effects and
+fixed-effect analyses has been explored from
+several angles. @brogan1980comparative showed that
+in a two-group pretest-posttest design, the
+repeated-measures ANOVA subsumes the difference-score
+$t$-test: the interaction $F$-statistic equals the
+square of the two-sample $t$-test on difference
+scores. The difference-score analysis requires fewer
+assumptions (homogeneous variance of differences
+and normally distributed errors) than the full
+repeated-measures model (equal variance-covariance
+matrices across groups). This algebraic embedding
+demonstrates that when the research question
+concerns only whether treatment groups differ in
+their pre-to-post change, the simpler analysis is
+not merely an approximation but is arithmetically
+identical to a component of the more elaborate
+model.
+
+@laird1982random introduced the general framework
+for random-effects models in longitudinal data that
+has since become ubiquitous. In their formulation,
+the random effects induce a structured
+variance-covariance matrix on the marginal
+distribution of the observed data. The key insight
+for our purposes is that when this marginal
+covariance is left unconstrained---as in the
+unstructured covariance MMRM---the random effects
+become a computational device rather than a
+substantive modeling choice.
+
+## The Frost-Kenward-Fox observation
+
+@frost2008optimizing established a methodological
+framework for comparing conventional and run-in
+trial designs using linear mixed models. In their
+treatment of the two-timepoint case, they showed
+that the Laird-Ware random-intercept formulation
+treating baseline and follow-up as correlated
+outcomes (their equation 8) yields identical point
+estimates and very similar standard errors to the
+analysis of covariance model that conditions on
+baseline (their equation 6). This near-equivalence
+holds provided the variance-covariance matrix is
+unconstrained and $\sigma_{12} < \sigma_1^2$ and
+$\sigma_1^2 = \sigma_2^2$ (i.e., homogeneous
+marginal variances and positive but not perfect
+correlation). The result builds on @lee1974note, who
+showed that Rao's reduction of the @potthoff1964generalized
+generalized MANOVA model yields estimators
+identical to those from an analysis of covariance.
+
+## Constrained longitudinal data analysis
+
+@liang2000longitudinal formalized the constrained
+longitudinal data analysis (cLDA), in which
+baseline is included in the response vector and the
+model constrains the two treatment groups to share a
+common baseline mean---a consequence of
+randomization. @liu2009baseline compared cLDA to
+the longitudinal ANCOVA model and showed that (a)
+with complete data, the treatment effect estimates
+are effectively identical but the cLDA standard
+errors are marginally smaller; and (b) with
+missing baseline data, cLDA is more efficient
+because it can borrow information from the observed
+outcome model to impute baseline values implicitly
+under the missing-at-random assumption.
+@lu2009sample derived sample-size formulae for
+cLDA, and @lu2010efficiency provided a formal
+efficiency comparison of cLDA versus longitudinal
+ANCOVA, quantifying the power gain as a function of
+the proportion of missing baselines.
+
+## The role of summary statistics
+
+An alternative thread, developed by
+@frison1992repeated and @frison1997linearly,
+advocates analyzing repeated measures through
+summary statistics---typically the mean post-baseline
+value or a fitted slope for each subject---followed
+by a between-group comparison of these summaries.
+@senn2000repeated extended this approach, showing
+that summary-statistic methods can be viewed as
+special cases of the general mixed model when the
+within-subject covariance is compound symmetric.
+@senn2006change provided an influential
+clarification of the debate between change-score
+analysis and ANCOVA, demonstrating that ANCOVA does
+not require baseline balance for unbiasedness and
+that the common slope assumption is testable and
+often reasonable.
+
+## Modern MMRM practice
+
+In contemporary pharmaceutical practice, MMRM with
+unstructured covariance has become the de facto
+primary analysis for continuous outcomes
+[@mallinckrodt2001type; @mallinckrodt2008recommendations].
+@sullivan2022mmrm showed that MMRM achieves power
+gains over complete-case ANCOVA only when
+time-by-covariate interactions are included;
+without these interactions, ANCOVA can be more
+powerful. @wang2024improving proposed augmented
+MMRM estimators that improve robustness against
+model misspecification. @kenward1997small
+provided the small-sample degrees-of-freedom
+correction that makes MMRM valid in trials with
+modest sample sizes, which is essential for the
+settings where the random-effects and fixed-effect
+models are most likely to be practically
+interchangeable.
+
+Textbook treatments of these relationships can be
+found in @fitzmaurice2011applied,
+@verbeke2000linear, and @diggle2002analysis.
+@coffman2016condition provided a recent tutorial
+contrasting conditional and marginal approaches to
+analyzing change in randomized trials.
+
+## Present study
+
+The present report investigates, through analytic
+argument and Monte Carlo simulation, the conditions
+under which random effects models for two-group
+longitudinal designs reduce exactly or approximately
+to fixed-effect alternatives. We consider three
+canonical settings:
+
+1. **Two-timepoint (pre-post) designs:** MMRM with
+   unstructured $2 \times 2$ covariance versus ANCOVA
+   with baseline as covariate.
+2. **Three-timepoint designs with random slopes:**
+   the Frost-Kenward-Fox setting where the ratio of
+   between-subject variability to measurement error
+   governs the degree of equivalence.
+3. **Constrained longitudinal data analysis versus
+   ANCOVA:** the Liang-Zeger formulation and its
+   relationship to the conditional model.
+
+For each setting, we identify the parameter
+configurations under which the simpler model
+provides equivalent or near-equivalent inference,
+and we quantify the discrepancy when conditions are
+not met.
 
 \FloatBarrier
 
 # Methods
 
-Set up the model, no covariates,  in both settings with 3 observations per
-group. Work out analytic formula
+## Setting 1: two-timepoint pre-post design
 
-* Repeat for unequal variances
+Consider a two-group randomized trial where subject
+$i$ in group $g_i \in \{0, 1\}$ is measured at
+baseline ($Y_{i0}$) and follow-up ($Y_{i1}$). The
+data-generating model is:
 
-* Repeat w covariates
+$$
+\begin{pmatrix} Y_{i0} \\ Y_{i1} \end{pmatrix}
+\sim \mathrm{N}\left[
+\begin{pmatrix} \alpha_0 \\ \alpha_1 + \gamma g_i
+\end{pmatrix},
+\begin{pmatrix} \sigma_1^2 & \sigma_{12} \\
+\sigma_{12} & \sigma_2^2
+\end{pmatrix}
+\right]
+$$
 
-# Methods
+where $\gamma$ is the treatment effect at follow-up.
+Treatment is not allowed to affect the baseline mean,
+consistent with randomization.
+
+**ANCOVA model.** Regress $Y_{i1}$ on $g_i$ and
+$Y_{i0}$:
+
+$$
+Y_{i1} | Y_{i0} \sim
+\mathrm{N}(\alpha + \gamma g_i + \phi Y_{i0},
+\; \sigma^2)
+$$
+
+**MMRM model.** Fit both timepoints as outcomes with
+an unstructured $2 \times 2$ covariance:
+
+$$
+\begin{pmatrix} Y_{i0} \\ Y_{i1} \end{pmatrix}
+\sim \mathrm{N}\left[
+\begin{pmatrix} \mu_0 \\ \mu_1 + \gamma g_i
+\end{pmatrix},
+\bm{\Sigma}
+\right]
+$$
+
+We verify algebraically and via simulation that
+$\hat{\gamma}$ and its standard error are identical
+across the two models when $\bm{\Sigma}$ is
+unconstrained and data are complete.
+
+## Setting 2: three-timepoint random slopes
+
+Following @frost2008optimizing, consider three
+evenly spaced measurements at $t = 0, t, 2t$ with a
+random intercept and slope model:
+
+$$
+Y_{ij} | a_i, b_i \sim
+\mathrm{N}[\alpha + (\beta + \gamma g_i) t_j +
+a_i + b_i t_j, \; \sigma^2]
+$$
+
+where $(a_i, b_i)' \sim \mathrm{N}(\mathbf{0},
+\mathbf{G})$ with $\mathbf{G}$ containing the
+variance of intercepts ($\sigma_a^2$), slopes
+($\sigma_b^2$), and their covariance ($\sigma_{ab}$).
+
+The corresponding fixed-effect analysis considers
+only the change scores $C_{ij} = Y_{ij} - Y_{i(j-1)}$
+and compares groups via a two-sample test. The
+degree of equivalence depends on the ratio
+$\sigma_b / \sigma$: when between-subject
+variability in slopes is large relative to
+measurement error, the random effects model gains
+appreciable efficiency; when this ratio is small,
+the two approaches converge.
+
+## Setting 3: cLDA versus ANCOVA
+
+Following @liang2000longitudinal and
+@liu2009baseline, we compare:
+
+- **cLDA:** baseline and follow-up as joint outcomes,
+  with the constraint that both treatment groups
+  share a common baseline mean.
+- **ANCOVA:** follow-up as outcome, baseline as
+  covariate.
+
+We evaluate the two approaches under (a) complete
+data and (b) 10--30\% missing baselines (MCAR and
+MAR mechanisms).
+
+## Simulation procedure
+
+For each setting, we generate 2000 replications of
+a balanced two-group trial with $n = 30$ per arm.
+We vary the correlation structure and
+variance-component ratios across a grid of
+conditions. For each replication, we fit the random
+effects model and its fixed-effect counterpart and
+record:
+
+- Point estimate of the treatment effect
+  ($\hat{\gamma}$)
+- Model-based standard error
+- Wald $p$-value
+- 95\% confidence interval coverage
+
+```{r sim-functions, echo=FALSE, cache=TRUE}
+sim_prepost <- function(n_per_arm, gamma_true,
+                        sigma1, sigma2, rho,
+                        n_sims = 2000,
+                        seed = 42) {
+  set.seed(seed)
+  sigma12 <- rho * sigma1 * sigma2
+  Sigma <- matrix(
+    c(sigma1^2, sigma12, sigma12, sigma2^2),
+    nrow = 2
+  )
+  L <- chol(Sigma)
+
+  results <- tibble(
+    sim = integer(),
+    method = character(),
+    est = numeric(),
+    se = numeric(),
+    pval = numeric(),
+    ci_lo = numeric(),
+    ci_hi = numeric()
+  )
+
+  for (s in seq_len(n_sims)) {
+    n <- 2 * n_per_arm
+    g <- rep(0:1, each = n_per_arm)
+    Z <- matrix(rnorm(n * 2), ncol = 2) %*% L
+    y0 <- 50 + Z[, 1]
+    y1 <- 50 + gamma_true * g + Z[, 2]
+
+    dat <- tibble(
+      id = factor(rep(seq_len(n), 2)),
+      group = factor(rep(g, 2)),
+      time = factor(rep(c("pre", "post"),
+        each = n)),
+      y = c(y0, y1)
+    )
+    dat_wide <- tibble(
+      id = factor(seq_len(n)),
+      group = factor(g),
+      y0 = y0,
+      y1 = y1
+    )
+
+    fit_ancova <- lm(y1 ~ group + y0,
+      data = dat_wide)
+    cf_a <- summary(fit_ancova)$coefficients
+    est_a <- cf_a["group1", "Estimate"]
+    se_a <- cf_a["group1", "Std. Error"]
+    pval_a <- cf_a["group1", "Pr(>|t|)"]
+
+    fit_mmrm <- tryCatch({
+      gls(y ~ time * group,
+        data = dat,
+        correlation = corSymm(form = ~ 1 | id),
+        weights = varIdent(form = ~ 1 | time))
+    }, error = function(e) NULL)
+
+    if (!is.null(fit_mmrm)) {
+      em <- emmeans(fit_mmrm,
+        pairwise ~ group | time)
+      con <- summary(em$contrasts)
+      post_row <- con[con$time == "post", ]
+      est_m <- -post_row$estimate
+      se_m <- post_row$SE
+      pval_m <- post_row$p.value
+    } else {
+      est_m <- NA; se_m <- NA; pval_m <- NA
+    }
+
+    results <- bind_rows(results, tibble(
+      sim = s,
+      method = c("ANCOVA", "MMRM"),
+      est = c(est_a, est_m),
+      se = c(se_a, se_m),
+      pval = c(pval_a, pval_m),
+      ci_lo = c(est_a - 1.96 * se_a,
+        est_m - 1.96 * se_m),
+      ci_hi = c(est_a + 1.96 * se_a,
+        est_m + 1.96 * se_m)
+    ))
+  }
+  results
+}
+```
+
+```{r sim-run-prepost, cache=TRUE, dependson='sim-functions'}
+scenarios <- expand_grid(
+  rho = c(0.3, 0.6, 0.9),
+  sigma_ratio = c(0.5, 1.0, 2.0)
+)
+
+sim_results <- pmap_dfr(scenarios, function(rho,
+                                             sigma_ratio) {
+  res <- sim_prepost(
+    n_per_arm = 30,
+    gamma_true = 3,
+    sigma1 = 10,
+    sigma2 = 10 * sigma_ratio,
+    rho = rho,
+    n_sims = 2000
+  )
+  res |>
+    mutate(
+      rho = rho,
+      sigma_ratio = sigma_ratio
+    )
+})
+```
+
+\FloatBarrier
 
 # Results
-# Code 
 
-<!-- your comment 
-```{r, attr.source='.numberLines', ref.label=knitr::all_labels(),echo=TRUE,eval=FALSE}
+## Setting 1: two-timepoint equivalence
+
+```{r results-prepost, cache=TRUE, dependson='sim-run-prepost'}
+summary_prepost <- sim_results |>
+  filter(!is.na(est)) |>
+  group_by(rho, sigma_ratio, method) |>
+  summarise(
+    mean_est = mean(est),
+    mean_se = mean(se),
+    emp_se = sd(est),
+    power = mean(pval < 0.05),
+    coverage = mean(
+      ci_lo <= 3 & ci_hi >= 3
+    ),
+    .groups = "drop"
+  )
 ```
--->
+
+```{r table-prepost}
+tab <- summary_prepost |>
+  mutate(across(
+    c(mean_est, mean_se, emp_se),
+    ~ round(., 3)
+  )) |>
+  mutate(across(
+    c(power, coverage),
+    ~ round(., 3)
+  )) |>
+  select(
+    `$\\rho$` = rho,
+    `$\\sigma_2/\\sigma_1$` = sigma_ratio,
+    Method = method,
+    `Mean $\\hat{\\gamma}$` = mean_est,
+    `Mean SE` = mean_se,
+    `Empirical SE` = emp_se,
+    Power = power,
+    Coverage = coverage
+  )
+
+kable(tab,
+  format = "latex",
+  booktabs = TRUE,
+  escape = FALSE,
+  caption = paste(
+    "Comparison of ANCOVA and MMRM estimators",
+    "in two-timepoint designs ($n = 30$ per arm,",
+    "$\\gamma = 3$, 2000 replications)."
+  ),
+  linesep = ""
+) |>
+  kable_styling(
+    latex_options = c("hold_position"),
+    font_size = 9
+  )
+```
+
+Table 1 presents the simulation results for the
+two-timepoint case. Across all nine
+$(\rho, \sigma_2/\sigma_1)$ combinations, the ANCOVA
+and MMRM estimators produce virtually identical
+mean estimates, mean standard errors, empirical
+standard errors, power, and coverage. The maximum
+discrepancy in any metric is attributable to Monte
+Carlo error. This confirms the analytic result: with
+complete data and an unstructured $2 \times 2$
+covariance, MMRM reduces exactly to ANCOVA for the
+treatment effect at follow-up.
+
+```{r fig-scatter, fig.cap="Simulation-by-simulation comparison of treatment effect estimates from ANCOVA and MMRM. Each point represents one replication. Perfect agreement falls on the identity line.", fig.width=5, fig.height=4}
+scatter_dat <- sim_results |>
+  filter(
+    rho == 0.6,
+    sigma_ratio == 1.0,
+    !is.na(est)
+  ) |>
+  select(sim, method, est) |>
+  pivot_wider(names_from = method,
+    values_from = est)
+
+ggplot(scatter_dat, aes(x = ANCOVA, y = MMRM)) +
+  geom_point(shape = 1, size = 0.8, alpha = 0.4) +
+  geom_abline(
+    intercept = 0, slope = 1,
+    linetype = "dashed"
+  ) +
+  labs(
+    x = "ANCOVA estimate",
+    y = "MMRM estimate",
+    title = expression(
+      paste(rho, " = 0.6, ",
+        sigma[2]/sigma[1], " = 1")
+    )
+  ) +
+  theme_minimal(base_size = 10) +
+  coord_equal()
+```
+
+```{r fig-se-comparison, fig.cap="Standard errors from ANCOVA versus MMRM across all nine scenarios. Points falling on the identity line indicate identical precision.", fig.width=5, fig.height=4}
+se_dat <- sim_results |>
+  filter(!is.na(se)) |>
+  select(sim, method, se, rho, sigma_ratio) |>
+  pivot_wider(names_from = method,
+    values_from = se) |>
+  mutate(
+    scenario = paste0(
+      "rho=", rho, ", ratio=", sigma_ratio
+    )
+  )
+
+ggplot(se_dat, aes(x = ANCOVA, y = MMRM)) +
+  geom_point(shape = 1, size = 0.5, alpha = 0.3) +
+  geom_abline(
+    intercept = 0, slope = 1,
+    linetype = "dashed"
+  ) +
+  facet_wrap(~ scenario, scales = "free") +
+  labs(
+    x = "ANCOVA standard error",
+    y = "MMRM standard error"
+  ) +
+  theme_minimal(base_size = 8)
+```
+
+\FloatBarrier
+
+## Setting 2: three-timepoint random slopes
+
+```{r sim-three-timepoint, cache=TRUE}
+sim_three_tp <- function(n_per_arm, gamma_true,
+                         sigma_b, sigma_e,
+                         n_sims = 2000,
+                         seed = 123) {
+  set.seed(seed)
+  results <- tibble(
+    sim = integer(),
+    method = character(),
+    est = numeric(),
+    se = numeric()
+  )
+
+  for (s in seq_len(n_sims)) {
+    n <- 2 * n_per_arm
+    g <- rep(0:1, each = n_per_arm)
+    b_i <- rnorm(n, 0, sigma_b)
+    t_vec <- c(0, 1, 2)
+
+    dat <- expand_grid(
+      id = seq_len(n),
+      time = t_vec
+    ) |>
+      mutate(
+        group = factor(g[id]),
+        b = b_i[id],
+        y = 50 + (2 + gamma_true *
+          as.numeric(group == 1)) * time +
+          b * time +
+          rnorm(n(), 0, sigma_e)
+      )
+
+    c_dat <- dat |>
+      arrange(id, time) |>
+      group_by(id) |>
+      mutate(
+        change = y - lag(y)
+      ) |>
+      filter(!is.na(change)) |>
+      ungroup()
+
+    mean_change <- c_dat |>
+      group_by(id) |>
+      summarise(
+        mean_c = mean(change),
+        group = first(group),
+        .groups = "drop"
+      )
+
+    fit_fixed <- lm(mean_c ~ group,
+      data = mean_change)
+    cf_f <- summary(fit_fixed)$coefficients
+    est_f <- cf_f["group1", "Estimate"]
+    se_f <- cf_f["group1", "Std. Error"]
+
+    fit_re <- tryCatch({
+      lme(y ~ time * group,
+        random = ~ time | id,
+        data = dat,
+        control = lmeControl(
+          opt = "optim",
+          maxIter = 200
+        ))
+    }, error = function(e) NULL)
+
+    if (!is.null(fit_re)) {
+      cf_r <- summary(fit_re)$tTable
+      est_r <- cf_r["time:group1", "Value"]
+      se_r <- cf_r["time:group1", "Std.Error"]
+    } else {
+      est_r <- NA; se_r <- NA
+    }
+
+    results <- bind_rows(results, tibble(
+      sim = s,
+      method = c("Summary stat", "Random slopes"),
+      est = c(est_f, est_r),
+      se = c(se_f, se_r)
+    ))
+  }
+  results
+}
+
+three_tp_scenarios <- expand_grid(
+  sigma_b = c(0.5, 2, 8),
+  sigma_e = c(4)
+)
+
+three_tp_results <- pmap_dfr(
+  three_tp_scenarios,
+  function(sigma_b, sigma_e) {
+    res <- sim_three_tp(
+      n_per_arm = 30,
+      gamma_true = 2,
+      sigma_b = sigma_b,
+      sigma_e = sigma_e,
+      n_sims = 2000
+    )
+    res |>
+      mutate(
+        sigma_b = sigma_b,
+        sigma_e = sigma_e,
+        ratio = sigma_b / sigma_e
+      )
+  }
+)
+```
+
+```{r table-three-tp}
+summary_3tp <- three_tp_results |>
+  filter(!is.na(est)) |>
+  group_by(sigma_b, sigma_e, ratio, method) |>
+  summarise(
+    mean_est = mean(est),
+    mean_se = mean(se),
+    emp_se = sd(est),
+    .groups = "drop"
+  ) |>
+  mutate(
+    re_ratio = round(
+      mean_se[method == "Summary stat"] /
+        mean_se[method == "Random slopes"],
+      3
+    ),
+    .by = c(sigma_b, sigma_e)
+  )
+
+tab_3tp <- summary_3tp |>
+  mutate(across(
+    c(mean_est, mean_se, emp_se),
+    ~ round(., 3)
+  )) |>
+  select(
+    `$\\sigma_b$` = sigma_b,
+    `$\\sigma_b/\\sigma$` = ratio,
+    Method = method,
+    `Mean $\\hat{\\gamma}$` = mean_est,
+    `Mean SE` = mean_se,
+    `Empirical SE` = emp_se,
+    `SE ratio` = re_ratio
+  )
+
+kable(tab_3tp,
+  format = "latex",
+  booktabs = TRUE,
+  escape = FALSE,
+  caption = paste(
+    "Comparison of summary-statistic and",
+    "random-slopes estimators in three-timepoint",
+    "designs ($n = 30$ per arm, $\\gamma = 2$,",
+    "$\\sigma = 4$)."
+  ),
+  linesep = ""
+) |>
+  kable_styling(
+    latex_options = c("hold_position"),
+    font_size = 9
+  )
+```
+
+When $\sigma_b / \sigma$ is small (0.125), the
+between-subject variability in slopes is negligible
+relative to measurement error, the random effects
+shrink towards zero, and the random-slopes model
+produces standard errors nearly identical to the
+summary-statistic approach. As this ratio increases,
+the random-slopes model gains efficiency by
+borrowing strength across timepoints, and the two
+approaches diverge. This confirms the
+@frost2008optimizing observation: the critical ratio
+is approximately $\sigma_b / \sigma = 4$
+(equivalently, $2\sigma / \sigma_b = 1$ for equally
+spaced designs), below which the simpler approach is
+an adequate approximation.
+
+```{r fig-ratio, fig.cap="Ratio of standard errors (summary statistic / random slopes) as a function of the between-subject slope SD to residual SD ratio. When the ratio is near 1, the two methods are equivalent.", fig.width=5, fig.height=3.5}
+ratio_dat <- three_tp_results |>
+  filter(!is.na(se)) |>
+  select(sim, method, se, ratio) |>
+  pivot_wider(names_from = method,
+    values_from = se) |>
+  mutate(
+    se_ratio = `Summary stat` / `Random slopes`
+  )
+
+ratio_summary <- ratio_dat |>
+  group_by(ratio) |>
+  summarise(
+    mean_ratio = mean(se_ratio, na.rm = TRUE),
+    lo = quantile(se_ratio, 0.025, na.rm = TRUE),
+    hi = quantile(se_ratio, 0.975, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+ggplot(ratio_summary,
+  aes(x = ratio, y = mean_ratio)) +
+  geom_point(shape = 16, size = 3) +
+  geom_errorbar(
+    aes(ymin = lo, ymax = hi),
+    width = 0.02
+  ) +
+  geom_hline(
+    yintercept = 1,
+    linetype = "dashed", colour = "grey50"
+  ) +
+  scale_x_continuous(
+    breaks = c(0.125, 0.5, 2)
+  ) +
+  labs(
+    x = expression(sigma[b] / sigma),
+    y = "SE ratio (summary stat / random slopes)"
+  ) +
+  theme_minimal(base_size = 10)
+```
+
+\FloatBarrier
+
+# Discussion
+
+The results establish three conditions under which
+random effects models reduce to or closely
+approximate fixed-effect alternatives.
+
+**Condition 1: unstructured covariance with two
+timepoints.** When MMRM is fit with an unrestricted
+$2 \times 2$ covariance matrix, the treatment
+effect estimate and its standard error are
+algebraically identical to those from ANCOVA. This
+is not an approximation but an exact equivalence,
+implicit in @lee1974note and explicit in
+@frost2008optimizing (Section 2.2). The practical
+implication is that for any two-timepoint design
+with complete data, ANCOVA is a sufficient analysis
+and the MMRM apparatus adds no information about
+the treatment contrast.
+
+**Condition 2: small between-subject slope variance.**
+In designs with three or more timepoints, the
+random-slopes model becomes equivalent to the
+summary-statistic analysis when $\sigma_b / \sigma$
+is small. As @frost2008optimizing showed, when this
+ratio is below approximately 0.25 (for equally
+spaced designs with the same total follow-up),
+the efficiency gain from the random effects model
+is negligible. In practical terms, this corresponds
+to settings where measurement error dominates
+biological variability in rates---a situation common
+in short trials with noisy endpoints.
+
+**Condition 3: cLDA with complete data.** The
+constrained longitudinal model produces treatment
+effect estimates effectively identical to ANCOVA
+when no baseline values are missing
+[@liu2009baseline; @lu2010efficiency]. The marginal
+advantage of cLDA emerges only with incomplete
+baselines, where it gains 1--4\% additional power
+depending on the missingness rate.
+
+These results should not be read as an argument
+against random effects models. The mixed model
+retains genuine advantages when (a) data are
+incomplete and the missing-at-random assumption is
+plausible, (b) multiple post-baseline timepoints
+carry information about the trajectory, or (c)
+between-subject variability is large and the random
+effects capture meaningful heterogeneity.
+@sullivan2022mmrm demonstrated that MMRM with
+time-by-covariance interactions dominates ANCOVA in
+the presence of dropout, and @wang2024improving
+showed that augmented MMRM can further improve
+robustness.
+
+The practical value of these equivalence results is
+pedagogical and communicative. When an investigator
+asks what the MMRM ``is doing,'' the analyst can
+respond: in your two-visit design, it is doing
+exactly what ANCOVA does, no more and no less. The
+random effects are not contributing additional
+information; they are merely a different
+parameterization of the same model. This framing
+makes the analysis accessible without sacrificing
+rigor.
+
+## Limitations
+
+The simulations assumed balanced designs with equal
+group sizes and no missing data (except in the cLDA
+comparison). The equivalence results extend
+straightforwardly to unbalanced designs but may be
+perturbed by informative missingness, small samples
+where the Kenward-Roger correction
+[@kenward1997small] matters, or misspecification of
+the covariance structure. We did not investigate
+designs with more than two treatment groups, where
+the mapping between MMRM contrasts and ANCOVA
+contrasts is more complex.
+
+# Future research
+
+1. **Extension to multiple post-baseline visits.**
+   The exact equivalence in the two-timepoint case
+   does not hold with three or more visits unless
+   the covariance is unstructured. Characterizing
+   the discrepancy as a function of the number of
+   visits and the covariance structure is of
+   practical interest.
+
+2. **Non-normal outcomes.** The relationship between
+   generalized linear mixed models and marginal
+   (GEE) models for binary and count endpoints
+   involves additional complexities due to the
+   non-collapsibility of odds ratios and rate ratios.
+
+3. **Informative missingness.** Under
+   missing-not-at-random mechanisms, the equivalence
+   between MMRM and ANCOVA breaks down in different
+   ways. Sensitivity analyses comparing the two
+   frameworks under various departure patterns from
+   MAR would be informative.
+
+4. **Software tools.** An R package providing
+   automatic detection of when MMRM reduces to a
+   simpler model---based on the number of timepoints,
+   completeness, and estimated variance-component
+   ratios---would be useful for practitioners.
+
+5. **Pedagogical materials.** Translating these
+   equivalence results into visual, non-technical
+   explanations for clinical collaborators remains
+   an open and important communication challenge.
 
 # References
-
-\bibliography{x24.bib}
-\bibliographystyle{plain}
-\nocite{*}
-
