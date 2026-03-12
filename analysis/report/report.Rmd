@@ -17,6 +17,9 @@ header-includes:
    - \usepackage{placeins}
    - \usepackage{amsmath}
    - \usepackage{bm}
+   - \usepackage{fancyhdr}
+   - \usepackage{currfile}
+   - \pagestyle{fancy}
    - \rhead{Lab report}
    - \fancyfoot[L]{\currfilename}
    - \setlength{\headheight}{13.59999pt}
@@ -277,11 +280,11 @@ $$
 \sim \mathrm{N}\left[
 \begin{pmatrix} \mu_{0g_i} \\
 \mu_{1g_i} \end{pmatrix},
-\hat{\bm{\Sigma}}
+\hat{\boldsymbol{\Sigma}}
 \right]
 $$
 
-with $\hat{\bm{\Sigma}}$ estimated without
+with $\hat{\boldsymbol{\Sigma}}$ estimated without
 constraints.
 
 ### Extracting the treatment contrast from
@@ -290,11 +293,11 @@ MMRM coefficients
 When the MMRM is fitted with the cell-means
 parameterization `y ~ 0 + tg` (where `tg` is a
 four-level factor for time-by-group), the coefficient
-vector $\hat{\bm{\beta}}$ contains the four estimated
+vector $\hat{\boldsymbol{\beta}}$ contains the four estimated
 cell means:
 
 $$
-\hat{\bm{\beta}} = \begin{pmatrix}
+\hat{\boldsymbol{\beta}} = \begin{pmatrix}
 \hat{\mu}_{00} \\ \hat{\mu}_{01} \\
 \hat{\mu}_{10} \\ \hat{\mu}_{11}
 \end{pmatrix}
@@ -307,10 +310,10 @@ $\mathbf{L} = (0, 0, -1, 1)'$:
 
 $$
 \hat{\gamma}_{\mathrm{MMRM}} =
-\mathbf{L}'\hat{\bm{\beta}}, \qquad
+\mathbf{L}'\hat{\boldsymbol{\beta}}, \qquad
 \widehat{\mathrm{Var}}(\hat{\gamma}_{\mathrm{MMRM}})
 = \mathbf{L}'\,
-\widehat{\mathrm{Var}}(\hat{\bm{\beta}})\,
+\widehat{\mathrm{Var}}(\hat{\boldsymbol{\beta}})\,
 \mathbf{L}
 $$
 
@@ -335,7 +338,7 @@ is the estimated regression of follow-up on baseline.
 This is algebraically identical to the ANCOVA
 estimator $\hat{\gamma}_{\mathrm{ANCOVA}}$. The proof
 follows from the block structure of the GLS normal
-equations when $\hat{\bm{\Sigma}}$ is unrestricted:
+equations when $\hat{\boldsymbol{\Sigma}}$ is unrestricted:
 the conditional model (ANCOVA) and the joint model
 (MMRM) yield the same sufficient statistics for
 $\gamma$.
