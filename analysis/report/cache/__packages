@@ -11,6 +11,3 @@ stringr
 forcats
 lubridate
 nlme
-Matrix
-lme4
-emmeans
