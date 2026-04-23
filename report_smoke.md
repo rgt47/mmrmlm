@@ -3,7 +3,7 @@ title: "When Do Random Effects Models Reduce to
   Fixed-Effect Alternatives? Conditions for
   Equivalence in Longitudinal Clinical Trials"
 author: "R.G. Thomas"
-date: "`r format(Sys.Date(), '%B %d, %Y')`"
+date: "April 19, 2026"
 fontsize: 11pt
 geometry: "left=3cm,right=5cm,top=2cm,bottom=2cm"
 output:
@@ -28,39 +28,7 @@ csl: statistics-in-medicine.csl
 link-citations: true
 ---
 
-```{r setup, include=FALSE, echo=FALSE}
-rm(list = ls())
-options(
-  knitr.kable.NA = "",
-  dplyr.summarise.inform = FALSE,
-  dplyr.print_max = 1e9,
-  knitr.table.format = "latex"
-)
-library(knitr)
-library(kableExtra)
-library(tidyverse)
-library(nlme)
 
-opts_chunk$set(
-  warning = FALSE,
-  message = FALSE,
-  echo = FALSE,
-  fig.width = 5,
-  fig.height = 3.5,
-  results = "asis",
-  dev = "pdf",
-  cache = TRUE,
-  cache.path = "cache/"
-)
-options(scipen = 1, digits = 4)
-
-# Morris, White, and Crowther (2019) §4.1: pin RNGkind and set the
-# seed ONCE at the start of the program. The simulation kernels
-# `sim_prepost()` and `sim_three_tp()` no longer accept a `seed`
-# argument; they consume RNG state from this single stream.
-RNGkind("L'Ecuyer-CMRG")
-set.seed(20260417)
-```
 
 # Introduction
 
@@ -436,193 +404,48 @@ fixed-effect counterpart and record:
 - Wald $p$-value
 - 95\% confidence interval coverage
 
-```{r sim-functions, echo=FALSE, cache=TRUE}
-sim_prepost <- function(n_per_arm, gamma_true,
-                        sigma1, sigma2, rho,
-                        n_sims = 2000) {
-  # Morris, White, and Crowther (2019) §4.1: the RNG seed is set ONCE
-  # by the caller. This function does NOT call `set.seed()`.
-  sigma12 <- rho * sigma1 * sigma2
-  Sigma <- matrix(
-    c(sigma1^2, sigma12, sigma12, sigma2^2),
-    nrow = 2
-  )
-  L <- chol(Sigma)
-  n <- 2 * n_per_arm
-  g <- rep(0:1, each = n_per_arm)
 
-  ancova_est <- ancova_se <- ancova_p <-
-    numeric(n_sims)
-  mmrm_est <- mmrm_se <- mmrm_p <-
-    numeric(n_sims)
 
-  for (s in seq_len(n_sims)) {
-    Z <- matrix(rnorm(n * 2), ncol = 2) %*% L
-    y0 <- 50 + Z[, 1]
-    y1 <- 50 + gamma_true * g + Z[, 2]
 
-    # -- ANCOVA --
-    fit_a <- lm(y1 ~ factor(g) + y0)
-    cf_a <- summary(fit_a)$coefficients
-    ancova_est[s] <- cf_a[2, 1]
-    ancova_se[s] <- cf_a[2, 2]
-    ancova_p[s] <- cf_a[2, 4]
-
-    # -- MMRM (cell-means, unstructured cov) --
-    dat <- data.frame(
-      id = factor(rep(seq_len(n), 2)),
-      tg = factor(c(
-        paste0("pre.", g),
-        paste0("post.", g)
-      )),
-      time_num = rep(c(0, 1), each = n),
-      y = c(y0, y1)
-    )
-
-    fit_m <- tryCatch(
-      gls(y ~ 0 + tg,
-        data = dat,
-        correlation = corSymm(form = ~ 1 | id),
-        weights = varIdent(form = ~ 1 | time_num)
-      ),
-      error = function(e) NULL
-    )
-
-    if (!is.null(fit_m)) {
-      beta <- coef(fit_m)
-      V <- vcov(fit_m)
-      nms <- names(beta)
-      # L: post.1 - post.0
-      Lc <- rep(0, length(beta))
-      Lc[grep("^tgpost\\.1$", nms)] <- 1
-      Lc[grep("^tgpost\\.0$", nms)] <- -1
-      mmrm_est[s] <- sum(Lc * beta)
-      mmrm_se[s] <- sqrt(
-        as.numeric(t(Lc) %*% V %*% Lc)
-      )
-      z <- mmrm_est[s] / mmrm_se[s]
-      mmrm_p[s] <- 2 * pnorm(-abs(z))
-    } else {
-      mmrm_est[s] <- NA
-      mmrm_se[s] <- NA
-      mmrm_p[s] <- NA
-    }
-  }
-
-  tibble(
-    sim = rep(seq_len(n_sims), 2),
-    method = rep(c("ANCOVA", "MMRM"),
-      each = n_sims),
-    est = c(ancova_est, mmrm_est),
-    se = c(ancova_se, mmrm_se),
-    pval = c(ancova_p, mmrm_p)
-  ) |>
-    mutate(
-      ci_lo = est - 1.96 * se,
-      ci_hi = est + 1.96 * se
-    )
-}
-```
-
-```{r sim-run-prepost, cache=TRUE, dependson='sim-functions'}
-scenarios <- expand_grid(
-  rho = c(0.3, 0.6, 0.9),
-  sigma_ratio = c(0.5, 1.0, 2.0)
-)
-
-sim_results <- pmap_dfr(
-  scenarios,
-  function(rho, sigma_ratio) {
-    sim_prepost(
-      n_per_arm = 30,
-      gamma_true = 3,
-      sigma1 = 10,
-      sigma2 = 10 * sigma_ratio,
-      rho = rho,
-      n_sims = 2000
-    ) |>
-      mutate(
-        rho = rho,
-        sigma_ratio = sigma_ratio
-      )
-  }
-)
-```
 
 \FloatBarrier
 
 # Results
 
-## Headline findings
-
-The headline numbers in this section are extracted via
-inline R from the `summary_prepost` and `summary_3tp` data
-frames computed in the chunks below. They are displayed
-after each respective results chunk executes; see the
-Setting 1 and Setting 2 subsections for the interpretive
-statements.
-
 ## Setting 1: two-timepoint equivalence
 
-```{r results-prepost, cache=TRUE, dependson='sim-run-prepost'}
-# Monte Carlo SE formulas per Morris, White & Crowther (2019)
-# Table 6.
-summary_prepost <- sim_results |>
-  filter(!is.na(est)) |>
-  group_by(rho, sigma_ratio, method) |>
-  summarise(
-    n_valid = n(),
-    mean_est = mean(est),
-    mcse_mean_est = sd(est) / sqrt(n_valid),
-    mean_se = mean(se),
-    mcse_mean_se = sd(se) / sqrt(n_valid),
-    emp_se = sd(est),
-    mcse_emp_se = emp_se / sqrt(2 * (n_valid - 1)),
-    power = mean(pval < 0.05),
-    mcse_power = sqrt(power * (1 - power) / n_valid),
-    coverage = mean(ci_lo <= 3 & ci_hi >= 3),
-    mcse_coverage = sqrt(coverage * (1 - coverage) / n_valid),
-    .groups = "drop"
-  )
-```
 
-```{r table-prepost}
-tab <- summary_prepost |>
-  mutate(across(
-    c(mean_est, mean_se, emp_se),
-    ~ round(., 3)
-  )) |>
-  mutate(across(
-    c(power, coverage),
-    ~ round(., 3)
-  )) |>
-  select(
-    `$\\rho$` = rho,
-    `$\\sigma_2/\\sigma_1$` = sigma_ratio,
-    Method = method,
-    `Mean $\\hat{\\gamma}$` = mean_est,
-    `Mean SE` = mean_se,
-    `Emp. SE` = emp_se,
-    Power = power,
-    Coverage = coverage
-  )
 
-kable(tab,
-  format = "latex",
-  booktabs = TRUE,
-  escape = FALSE,
-  caption = paste(
-    "Comparison of ANCOVA and MMRM estimators in",
-    "two-timepoint designs ($n = 30$ per arm,",
-    "$\\gamma = 3$, 2000 replications)."
-  ),
-  linesep = ""
-) |>
-  kable_styling(
-    latex_options = c("hold_position"),
-    font_size = 9
-  )
-```
+\begin{table}[!h]
+\centering
+\caption{\label{tab:table-prepost}Comparison of ANCOVA and MMRM estimators in two-timepoint designs ($n = 30$ per arm, $\gamma = 3$, 2000 replications).}
+\centering
+\fontsize{9}{11}\selectfont
+\begin{tabular}[t]{rrlrrrrr}
+\toprule
+$\rho$ & $\sigma_2/\sigma_1$ & Method & Mean $\hat{\gamma}$ & Mean SE & Emp. SE & Power & Coverage\\
+\midrule
+0.3 & 0.5 & ANCOVA & 3.024 & 1.240 & 1.275 & 0.657 & 0.942\\
+0.3 & 0.5 & MMRM & 3.032 & 1.288 & 1.331 & 0.642 & 0.942\\
+0.3 & 1.0 & ANCOVA & 3.020 & 2.472 & 2.531 & 0.221 & 0.939\\
+0.3 & 1.0 & MMRM & 3.027 & 2.568 & 2.618 & 0.226 & 0.942\\
+0.3 & 2.0 & ANCOVA & 3.214 & 4.952 & 5.082 & 0.113 & 0.938\\
+0.3 & 2.0 & MMRM & 3.227 & 5.140 & 5.252 & 0.109 & 0.939\\
+0.6 & 0.5 & ANCOVA & 3.004 & 1.037 & 1.039 & 0.805 & 0.948\\
+0.6 & 0.5 & MMRM & 3.020 & 1.280 & 1.274 & 0.657 & 0.944\\
+0.6 & 1.0 & ANCOVA & 2.900 & 2.075 & 2.086 & 0.275 & 0.948\\
+0.6 & 1.0 & MMRM & 2.890 & 2.574 & 2.590 & 0.200 & 0.944\\
+0.6 & 2.0 & ANCOVA & 2.999 & 4.146 & 4.152 & 0.108 & 0.950\\
+0.6 & 2.0 & MMRM & 2.989 & 5.145 & 5.087 & 0.089 & 0.950\\
+0.9 & 0.5 & ANCOVA & 3.009 & 0.564 & 0.564 & 1.000 & 0.945\\
+0.9 & 0.5 & MMRM & 3.053 & 1.283 & 1.253 & 0.662 & 0.947\\
+0.9 & 1.0 & ANCOVA & 2.964 & 1.127 & 1.134 & 0.731 & 0.941\\
+0.9 & 1.0 & MMRM & 2.923 & 2.568 & 2.596 & 0.226 & 0.940\\
+0.9 & 2.0 & ANCOVA & 2.989 & 2.258 & 2.293 & 0.249 & 0.949\\
+0.9 & 2.0 & MMRM & 2.910 & 5.145 & 5.246 & 0.099 & 0.946\\
+\bottomrule
+\end{tabular}
+\end{table}
 
 Table 1 presents the simulation results for the
 two-timepoint case. Across all nine
@@ -636,224 +459,34 @@ and an unstructured $2 \times 2$ covariance, MMRM
 reduces exactly to ANCOVA for the treatment effect at
 follow-up.
 
-```{r fig-scatter, fig.cap="Simulation-by-simulation comparison of treatment effect estimates from ANCOVA and MMRM ($\\rho = 0.6$, $\\sigma_2/\\sigma_1 = 1$). Points on the identity line indicate exact agreement.", fig.width=4.5, fig.height=4}
-scatter_dat <- sim_results |>
-  filter(
-    rho == 0.6,
-    sigma_ratio == 1.0,
-    !is.na(est)
-  ) |>
-  select(sim, method, est) |>
-  pivot_wider(names_from = method,
-    values_from = est)
+![Simulation-by-simulation comparison of treatment effect estimates from ANCOVA and MMRM ($\rho = 0.6$, $\sigma_2/\sigma_1 = 1$). Points on the identity line indicate exact agreement.](figure/fig-scatter-1.pdf)
 
-ggplot(scatter_dat, aes(x = ANCOVA, y = MMRM)) +
-  geom_point(shape = 1, size = 0.8, alpha = 0.4) +
-  geom_abline(
-    intercept = 0, slope = 1,
-    linetype = "dashed"
-  ) +
-  labs(
-    x = "ANCOVA estimate",
-    y = "MMRM estimate"
-  ) +
-  theme_minimal(base_size = 10) +
-  coord_equal()
-```
-
-```{r fig-se-comparison, fig.cap="Standard errors from ANCOVA versus MMRM across all nine scenarios. Identity line shown as dashed.", fig.width=6, fig.height=5}
-se_dat <- sim_results |>
-  filter(!is.na(se)) |>
-  select(sim, method, se, rho, sigma_ratio) |>
-  pivot_wider(names_from = method,
-    values_from = se) |>
-  mutate(
-    scenario = paste0(
-      "rho=", rho,
-      ", ratio=", sigma_ratio
-    )
-  )
-
-ggplot(se_dat, aes(x = ANCOVA, y = MMRM)) +
-  geom_point(shape = 1, size = 0.5, alpha = 0.3) +
-  geom_abline(
-    intercept = 0, slope = 1,
-    linetype = "dashed"
-  ) +
-  facet_wrap(~ scenario, scales = "free") +
-  labs(
-    x = "ANCOVA standard error",
-    y = "MMRM standard error"
-  ) +
-  theme_minimal(base_size = 8)
-```
+![Standard errors from ANCOVA versus MMRM across all nine scenarios. Identity line shown as dashed.](figure/fig-se-comparison-1.pdf)
 
 \FloatBarrier
 
 ## Setting 2: three-timepoint random slopes
 
-```{r sim-three-tp, cache=TRUE}
-sim_three_tp <- function(n_per_arm, gamma_true,
-                         sigma_b, sigma_e,
-                         n_sims = 2000) {
-  # Morris, White, and Crowther (2019) §4.1: the RNG seed is set ONCE
-  # by the caller. This function does NOT call `set.seed()`.
-  n <- 2 * n_per_arm
-  g <- rep(0:1, each = n_per_arm)
-  t_vec <- c(0, 1, 2)
-  fixed_est <- fixed_se <- numeric(n_sims)
-  re_est <- re_se <- numeric(n_sims)
 
-  for (s in seq_len(n_sims)) {
-    b_i <- rnorm(n, 0, sigma_b)
 
-    dat <- expand_grid(
-      subj = seq_len(n),
-      time = t_vec
-    ) |>
-      mutate(
-        id = factor(subj),
-        group = factor(g[subj]),
-        b = b_i[subj],
-        y = 50 +
-          (2 + gamma_true *
-            as.numeric(group == 1)) * time +
-          b * time +
-          rnorm(n(), 0, sigma_e)
-      )
-
-    # -- Summary statistic: mean change --
-    c_dat <- dat |>
-      arrange(subj, time) |>
-      group_by(subj) |>
-      mutate(change = y - lag(y)) |>
-      filter(!is.na(change)) |>
-      summarise(
-        mean_c = mean(change),
-        group = first(group),
-        .groups = "drop"
-      )
-
-    fit_f <- lm(mean_c ~ group, data = c_dat)
-    cf_f <- summary(fit_f)$coefficients
-    fixed_est[s] <- cf_f[2, 1]
-    fixed_se[s] <- cf_f[2, 2]
-
-    # -- Random slopes model --
-    fit_r <- tryCatch(
-      lme(y ~ time * group,
-        random = ~ time | id,
-        data = dat,
-        control = lmeControl(
-          opt = "optim",
-          maxIter = 200
-        )),
-      error = function(e) NULL
-    )
-
-    if (!is.null(fit_r)) {
-      cf_r <- summary(fit_r)$tTable
-      rn <- grep("time:group", rownames(cf_r))
-      re_est[s] <- cf_r[rn, "Value"]
-      re_se[s] <- cf_r[rn, "Std.Error"]
-    } else {
-      re_est[s] <- NA
-      re_se[s] <- NA
-    }
-  }
-
-  tibble(
-    sim = rep(seq_len(n_sims), 2),
-    method = rep(
-      c("Summary stat", "Random slopes"),
-      each = n_sims
-    ),
-    est = c(fixed_est, re_est),
-    se = c(fixed_se, re_se)
-  )
-}
-
-three_tp_results <- map_dfr(
-  c(0.5, 2, 8),
-  function(sb) {
-    sim_three_tp(
-      n_per_arm = 30,
-      gamma_true = 2,
-      sigma_b = sb,
-      sigma_e = 4,
-      n_sims = 2000
-    ) |>
-      mutate(
-        sigma_b = sb,
-        sigma_e = 4,
-        ratio = sb / 4
-      )
-  }
-)
-```
-
-```{r table-three-tp}
-# Monte Carlo SE formulas per Morris, White & Crowther (2019) Table 6.
-summary_3tp <- three_tp_results |>
-  filter(!is.na(est)) |>
-  group_by(sigma_b, ratio, method) |>
-  summarise(
-    n_valid = n(),
-    mean_est = mean(est),
-    mcse_mean_est = sd(est) / sqrt(n_valid),
-    mean_se = mean(se),
-    mcse_mean_se = sd(se) / sqrt(n_valid),
-    emp_se = sd(est),
-    mcse_emp_se = emp_se / sqrt(2 * (n_valid - 1)),
-    .groups = "drop"
-  )
-
-se_ratios <- summary_3tp |>
-  select(sigma_b, ratio, method, mean_se) |>
-  pivot_wider(
-    names_from = method,
-    values_from = mean_se
-  ) |>
-  mutate(
-    se_ratio = round(
-      `Summary stat` / `Random slopes`, 3
-    )
-  ) |>
-  select(sigma_b, se_ratio)
-
-tab_3tp <- summary_3tp |>
-  left_join(se_ratios, by = "sigma_b") |>
-  mutate(across(
-    c(mean_est, mean_se, emp_se),
-    ~ round(., 3)
-  )) |>
-  select(
-    `$\\sigma_b$` = sigma_b,
-    `$\\sigma_b/\\sigma$` = ratio,
-    Method = method,
-    `Mean $\\hat{\\gamma}$` = mean_est,
-    `Mean SE` = mean_se,
-    `Emp. SE` = emp_se,
-    `SE ratio` = se_ratio
-  )
-
-kable(tab_3tp,
-  format = "latex",
-  booktabs = TRUE,
-  escape = FALSE,
-  caption = paste(
-    "Comparison of summary-statistic and",
-    "random-slopes estimators in three-timepoint",
-    "designs ($n = 30$ per arm, $\\gamma = 2$,",
-    "$\\sigma = 4$)."
-  ),
-  linesep = ""
-) |>
-  kable_styling(
-    latex_options = c("hold_position"),
-    font_size = 9
-  )
-```
+\begin{table}[!h]
+\centering
+\caption{\label{tab:table-three-tp}Comparison of summary-statistic and random-slopes estimators in three-timepoint designs ($n = 30$ per arm, $\gamma = 2$, $\sigma = 4$).}
+\centering
+\fontsize{9}{11}\selectfont
+\begin{tabular}[t]{rrlrrrr}
+\toprule
+$\sigma_b$ & $\sigma_b/\sigma$ & Method & Mean $\hat{\gamma}$ & Mean SE & Emp. SE & SE ratio\\
+\midrule
+0.5 & 0.125 & Random slopes & 2.030 & 0.752 & 0.737 & 0.980\\
+0.5 & 0.125 & Summary stat & 2.030 & 0.737 & 0.734 & 0.980\\
+2.0 & 0.500 & Random slopes & 2.007 & 0.901 & 0.906 & 0.987\\
+2.0 & 0.500 & Summary stat & 2.007 & 0.890 & 0.906 & 0.987\\
+8.0 & 2.000 & Random slopes & 1.906 & 2.184 & 2.191 & 0.998\\
+8.0 & 2.000 & Summary stat & 1.907 & 2.179 & 2.191 & 0.998\\
+\bottomrule
+\end{tabular}
+\end{table}
 
 When $\sigma_b / \sigma$ is small (0.125), the
 between-subject variability in slopes is negligible
@@ -870,46 +503,7 @@ $2\sigma / \sigma_b = 1$ for equally spaced designs),
 below which the simpler approach is an adequate
 approximation.
 
-```{r fig-ratio, fig.cap="Ratio of standard errors (summary statistic / random slopes) as a function of the between-subject slope SD to residual SD ratio. Values near 1 indicate the two methods are equivalent.", fig.width=5, fig.height=3.5}
-ratio_dat <- three_tp_results |>
-  filter(!is.na(se)) |>
-  select(sim, method, se, ratio) |>
-  pivot_wider(
-    names_from = method,
-    values_from = se
-  ) |>
-  mutate(
-    se_ratio = `Summary stat` / `Random slopes`
-  )
-
-ratio_summary <- ratio_dat |>
-  group_by(ratio) |>
-  summarise(
-    mean_ratio = mean(se_ratio, na.rm = TRUE),
-    lo = quantile(se_ratio, 0.025, na.rm = TRUE),
-    hi = quantile(se_ratio, 0.975, na.rm = TRUE),
-    .groups = "drop"
-  )
-
-ggplot(ratio_summary,
-  aes(x = ratio, y = mean_ratio)) +
-  geom_point(shape = 16, size = 3) +
-  geom_errorbar(
-    aes(ymin = lo, ymax = hi), width = 0.02
-  ) +
-  geom_hline(
-    yintercept = 1,
-    linetype = "dashed", colour = "grey50"
-  ) +
-  scale_x_continuous(
-    breaks = c(0.125, 0.5, 2)
-  ) +
-  labs(
-    x = expression(sigma[b] / sigma),
-    y = "SE ratio (summary stat / random slopes)"
-  ) +
-  theme_minimal(base_size = 10)
-```
+![Ratio of standard errors (summary statistic / random slopes) as a function of the between-subject slope SD to residual SD ratio. Values near 1 indicate the two methods are equivalent.](figure/fig-ratio-1.pdf)
 
 \FloatBarrier
 
