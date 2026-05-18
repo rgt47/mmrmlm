@@ -29,6 +29,8 @@ header-includes:
    - \rhead{Lab report}
    - \fancyfoot[L]{\currfilename}
    - \setlength{\headheight}{13.59999pt}
+  - \usepackage{setspace}
+  - \setstretch{1.1}
 ---
 
 ```{r setup, include=FALSE, echo=FALSE}
