@@ -920,7 +920,7 @@ ggplot(ratio_summary,
 
 # Discussion
 
-The results establish three conditions under which
+We may organize the findings around three conditions under which
 random effects models reduce to or closely approximate
 fixed-effect alternatives.
 
@@ -1033,7 +1033,7 @@ more complex.
 
 ## Morris et al. (2019) ADEMP Compliance
 
-This simulation study was audited against the reporting standards
+We audited this simulation study against the reporting standards
 proposed by Morris, White, and Crowther [-@morris2019using]. The full
 audit is at `docs/morris-audit-2026-04-17.md`.
 
@@ -1045,8 +1045,8 @@ audit is at `docs/morris-audit-2026-04-17.md`.
 - `n_sims = 2000` hardcoded at two places without MCSE-based justification.
 - Seeds are set via function arguments (`seed = 42`, `seed = 123`), not once at program start; no MCSE columns in `summary_prepost()` or `summary_3tp()`.
 
-A remediation plan is documented in the audit file and will be
-executed in a subsequent revision.
+A remediation plan is recorded in the audit file and will be
+taken up in a subsequent revision.
 
 
 ```{r footer, echo=FALSE, results='asis'}
