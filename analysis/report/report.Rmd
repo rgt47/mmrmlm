@@ -122,8 +122,8 @@ the random effects induce a structured
 variance-covariance matrix on the marginal
 distribution of the observed data. The key insight
 for our purposes is that when this marginal
-covariance is left unconstrained---as in the
-unstructured covariance MMRM---the random effects
+covariance is left unconstrained (as in the
+unstructured covariance MMRM) the random effects
 become a computational device rather than a
 substantive modeling choice.
 
@@ -174,8 +174,8 @@ proportion of missing baselines.
 An alternative thread, developed by
 @frison1992repeated and @frison1997linearly,
 advocates analyzing repeated measures through summary
-statistics---typically the mean post-baseline value or
-a fitted slope for each subject---followed by a
+statistics (typically the mean post-baseline value or
+a fitted slope for each subject) followed by a
 between-group comparison of these summaries.
 @senn2000repeated extended this approach, showing that
 summary-statistic methods can be viewed as special
@@ -216,11 +216,11 @@ analyzing change in randomized trials.
 
 ## Present study
 
-The present report investigates, through analytic
-argument and Monte Carlo simulation, the conditions
-under which random effects models for two-group
-longitudinal designs reduce exactly or approximately
-to fixed-effect alternatives. We consider three
+We investigate, through analytic argument and Monte
+Carlo simulation, the conditions under which random
+effects models for two-group longitudinal designs
+reduce exactly or approximately to fixed-effect
+alternatives. We consider three
 canonical settings:
 
 1. **Two-timepoint (pre-post) designs:** MMRM with
