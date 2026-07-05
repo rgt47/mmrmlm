@@ -10,7 +10,10 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.0
 Suggests:
     here,
+    kableExtra,
     knitr,
+    nlme,
     rmarkdown,
     rprojroot,
+    tidyverse,
     tinytest
