@@ -22,14 +22,14 @@ header-includes:
   - \usepackage{amssymb}
   - \usepackage{lineno}
   - \linenumbers
-   - \usepackage{placeins}
-   - \usepackage{bm}
-   - \usepackage{fancyhdr}
-   - \usepackage{currfile}
-   - \pagestyle{fancy}
-   - \rhead{Lab report}
-   - \fancyfoot[L]{\currfilename}
-   - \setlength{\headheight}{13.59999pt}
+  - \usepackage{placeins}
+  - \usepackage{bm}
+  - \usepackage{fancyhdr}
+  - \usepackage{currfile}
+  - \pagestyle{fancy}
+  - \rhead{Lab report}
+  - \fancyfoot[L]{\currfilename}
+  - \setlength{\headheight}{13.59999pt}
   - \usepackage{setspace}
   - \setstretch{1.1}
 ---
