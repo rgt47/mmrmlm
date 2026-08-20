@@ -29,10 +29,38 @@ header-includes:
   - \usepackage{placeins}
   - \usepackage{bm}
 knit: (function(input, ...) { d <- dirname(input); while (!file.exists(file.path(d, 'tools', 'stamp-render.R')) && d != dirname(d)) d <- dirname(d); source(file.path(d, 'tools', 'stamp-render.R'))$value(input) })
+abstract: |
+  Mixed models for repeated measures (MMRM) are the default
+  primary analysis for continuous longitudinal endpoints in
+  clinical trials, but their variance-component machinery is
+  often opaque to collaborators. We synthesize and verify, by
+  Monte Carlo simulation, two settings in which a random-effects
+  or joint model reduces to a simpler fixed-effect analysis. In
+  a two-timepoint pre-post design with complete data, an
+  unstructured-covariance MMRM and an ANCOVA conditioning on
+  baseline yield algebraically identical treatment-effect point
+  estimates; we give a short proof and confirm it by simulation
+  across a $3 \times 3$ grid of correlation and variance-ratio
+  values. In a three-timepoint design with a slope-only random
+  effect and no random intercept, a per-subject mean-change
+  estimator remains within half a percent of a random-slopes
+  linear mixed model's standard error across the full simulated
+  range of between-subject slope variability, a design-specific
+  finding we contrast with an earlier, non-reproducible version of
+  this simulation that reported divergence traceable to a
+  data-generating/fitted-model mismatch. We report both settings
+  under a common Wald reference distribution with Monte Carlo
+  standard
+  errors per Morris, White, and Crowther (2019), and we state
+  explicitly the conditions under which the simpler analysis is
+  exact, approximate, or inadequate. This paper does not claim new
+  theory; its contribution is a single accessible account, with
+  simulation-verified thresholds and decision guidance, for the
+  applied statistician deciding when the mixed-model apparatus
+  earns its complexity.
 ---
 
 ```{r setup, include=FALSE, echo=FALSE}
-rm(list = ls())
 options(
   knitr.kable.NA = "",
   dplyr.summarise.inform = FALSE,
@@ -44,6 +72,19 @@ library(kableExtra)
 library(tidyverse)
 library(nlme)
 
+# Simulation kernels (sim_prepost(), sim_three_tp()) live in
+# R/sim_kernels.R, not inline in this document, so they are
+# reusable and unit-testable (inst/tinytest/test_sim_kernels.R).
+repo_root <- (function() {
+  d <- normalizePath(dirname(knitr::current_input(dir = TRUE)))
+  while (!file.exists(file.path(d, "DESCRIPTION")) &&
+    d != dirname(d)) {
+    d <- dirname(d)
+  }
+  d
+})()
+source(file.path(repo_root, "R", "sim_kernels.R"))
+
 opts_chunk$set(
   warning = FALSE,
   message = FALSE,
@@ -51,21 +92,28 @@ opts_chunk$set(
   fig.width = 5,
   fig.height = 3.5,
   results = "asis",
-  dev = "pdf",
-  cache = TRUE,
-  cache.path = "cache/"
+  dev = "pdf"
 )
 options(scipen = 1, digits = 4)
 
 # Morris, White, and Crowther (2019) §4.1: pin RNGkind and set the
 # seed ONCE at the start of the program. The simulation kernels
-# `sim_prepost()` and `sim_three_tp()` no longer accept a `seed`
-# argument; they consume RNG state from this single stream.
+# `sim_prepost()` and `sim_three_tp()` do not call `set.seed()`;
+# they consume RNG state from this single stream. Caching is
+# disabled for the simulation chunks below (they instead read
+# pre-computed .rds output from
+# analysis/data/derived_data/, produced by
+# analysis/scripts/run_simulations.R, which pins the same seed) so
+# that results are a deterministic function of the source rather
+# than of knitr's chunk-cache invalidation order.
 RNGkind("L'Ecuyer-CMRG")
 set.seed(20260417)
 ```
 
 # Introduction
+
+**Keywords:** MMRM; ANCOVA; mixed models; longitudinal data;
+clinical trials; equivalence; Monte Carlo simulation.
 
 ## The practical problem
 
@@ -218,8 +266,8 @@ We investigate, through analytic argument and Monte
 Carlo simulation, the conditions under which random
 effects models for two-group longitudinal designs
 reduce exactly or approximately to fixed-effect
-alternatives. We consider three
-canonical settings:
+alternatives. We consider two settings, both
+implemented and simulated in this paper:
 
 1. **Two-timepoint (pre-post) designs:** MMRM with
    unstructured $2 \times 2$ covariance versus ANCOVA
@@ -228,14 +276,20 @@ canonical settings:
    the Frost-Kenward-Fox setting where the ratio of
    between-subject variability to measurement error
    governs the degree of equivalence.
-3. **Constrained longitudinal data analysis versus
-   ANCOVA:** the Liang-Zeger formulation and its
-   relationship to the conditional model.
 
-For each setting, we identify the parameter
-configurations under which the simpler model provides
-equivalent or near-equivalent inference, and we
-quantify the discrepancy when conditions are not met.
+A third setting surveyed in the literature review
+above, constrained longitudinal data analysis (cLDA)
+versus longitudinal ANCOVA [@liang2000longitudinal;
+@liu2009baseline; @lu2010efficiency], is discussed on
+the basis of the cited published results only; we do
+not implement or simulate a cLDA model in this paper,
+and no cLDA claim below rests on evidence generated
+here (see Discussion and Future research). For each of
+the two implemented settings, we identify the
+parameter configurations under which the simpler model
+provides equivalent or near-equivalent inference, and
+we quantify the discrepancy when conditions are not
+met.
 
 \FloatBarrier
 
@@ -265,6 +319,19 @@ Following Morris, White, and Crowther [-@morris2019using]:
   is adequate.
 
 ## Setting 1: two-timepoint pre-post design
+
+A terminological note: the "MMRM" in this setting is fit
+via `gls()` with an unstructured marginal covariance and
+contains no random effects; both it and ANCOVA are
+fixed-effects (marginal or conditional) models. We retain
+the label "MMRM" because it is the term of art for this
+covariance-pattern model in the clinical-trials literature
+[@mallinckrodt2001type], but the comparison in this
+section is properly framed as joint (marginal) versus
+conditional modeling of the same two-timepoint data, not
+as random-effects versus fixed-effects modeling; Setting 2
+below is the setting where genuine random effects are
+involved.
 
 Consider a two-group randomized trial where subject
 $i$ in group $g_i \in \{0, 1\}$ is measured at
@@ -301,63 +368,89 @@ adjusted for baseline, with
 $\hat{\phi} = S_{12} / S_{11}$ the pooled
 within-group regression slope.
 
-### MMRM (cell-means) model
+### MMRM model
 
 Fit both timepoints as outcomes with an unstructured
-$2 \times 2$ covariance, using a cell-means
-parameterization. Let $\mu_{jg}$ denote the mean at
-time $j$ in group $g$. The model is:
+$2 \times 2$ covariance and a **baseline-constrained**
+mean structure: the treatment group enters only through
+an interaction with the follow-up visit indicator, so the
+baseline mean is the same for both groups by construction
+(no treatment main effect at baseline). With $\mathrm{time}_j
+\in \{0, 1\}$ indexing visit and $\mathrm{grp\_post}_i =
+g_i \cdot \mathbb{1}(\mathrm{time}_j = 1)$:
 
 $$
-\begin{pmatrix} Y_{i0} \\ Y_{i1} \end{pmatrix}
-\sim \mathrm{N}\left[
-\begin{pmatrix} \mu_{0g_i} \\
-\mu_{1g_i} \end{pmatrix},
-\hat{\mathbf{\Sigma}}
-\right]
+Y_{ij} \sim
+\mathrm{N}\!\left[\eta_j + \gamma_{\mathrm{MMRM}}\,
+\mathrm{grp\_post}_i,\; \hat{\mathbf{\Sigma}}\right],
+\qquad j \in \{0, 1\}
 $$
 
 with $\hat{\mathbf{\Sigma}}$ estimated without
-constraints.
+constraints and $\eta_j$ a visit-specific intercept common
+to both groups. This is the standard clinical-trial MMRM
+convention (no treatment effect is modeled at a
+pre-randomization baseline visit) and, as shown below, is
+the specification under which the MMRM point estimate is
+algebraically identical to ANCOVA. A fully unconstrained
+"cell-means" alternative, in which each of the four
+time-by-group cells gets its own free mean
+($\mu_{0,0}, \mu_{0,1}, \mu_{1,0}, \mu_{1,1}$, with the
+follow-up contrast taken as $\hat\mu_{1,1} -
+\hat\mu_{1,0}$), does **not** achieve this identity: for a
+saturated per-group mean model, GLS reduces to the sample
+mean vector for any covariance structure (a standard
+growth-curve/SUR result), so that contrast reduces to the
+raw, baseline-unadjusted follow-up group difference. We
+verified this discrepancy numerically before adopting the
+baseline-constrained specification used throughout this
+paper (Appendix A; `inst/tinytest/test_sim_kernels.R`).
 
 ### Extracting the treatment contrast from
 MMRM coefficients
 
-When the MMRM is fitted with the cell-means
-parameterization `y ~ 0 + tg` (where `tg` is a
-four-level factor for time-by-group), the coefficient
-vector $\hat{\mathbf{\beta}}$ contains the four estimated
-cell means:
+When the MMRM is fitted as `gls(y ~ time_f + grp_post,
+...)` (where `time_f` is a two-level visit factor and
+`grp_post` is the group-by-follow-up interaction defined
+above), the coefficient on `grp_post` directly estimates
+the treatment effect at follow-up; no separate contrast
+computation is needed, mirroring the extraction for
+Setting 2 below:
+
+$$
+\hat{\gamma}_{\mathrm{MMRM}} =
+\hat{\beta}_{\mathrm{grp\_post}}, \qquad
+\mathrm{SE}(\hat{\gamma}_{\mathrm{MMRM}}) =
+\text{tTable}[\texttt{"grp\_post"},\,
+\texttt{"Std.Error"}]
+$$
+
+An earlier draft used the free four-parameter cell-means
+model above with an explicit contrast vector
+$\mathbf{L} = (0, 0, -1, 1)'$:
 
 $$
 \hat{\mathbf{\beta}} = \begin{pmatrix}
 \hat{\mu}_{00} \\ \hat{\mu}_{01} \\
 \hat{\mu}_{10} \\ \hat{\mu}_{11}
-\end{pmatrix}
+\end{pmatrix}, \qquad
+\hat{\gamma}_{\mathrm{MMRM}}^{(\mathrm{unconstrained})} =
+\mathbf{L}'\hat{\mathbf{\beta}}, \quad
+\mathbf{L} = (0, 0, -1, 1)'.
 $$
 
-The treatment effect at follow-up is the contrast
-$\hat{\gamma}_{\mathrm{MMRM}} = \hat{\mu}_{11} -
-\hat{\mu}_{10}$, obtained via the contrast vector
-$\mathbf{L} = (0, 0, -1, 1)'$:
-
-$$
-\hat{\gamma}_{\mathrm{MMRM}} =
-\mathbf{L}'\hat{\mathbf{\beta}}, \qquad
-\widehat{\mathrm{Var}}(\hat{\gamma}_{\mathrm{MMRM}})
-= \mathbf{L}'\,
-\widehat{\mathrm{Var}}(\hat{\mathbf{\beta}})\,
-\mathbf{L}
-$$
-
-This makes the extraction fully transparent---no
-dependence on `emmeans` or other contrast packages.
+As noted above, this unconstrained contrast reduces to
+the raw follow-up group difference and is **not** used in
+the simulations reported below; it is shown only to
+document, and warn against, the specification error it
+represents. The baseline-constrained model in the
+previous subsection is used throughout.
 
 ### Algebraic equivalence
 
 The key result, implicit in @lee1974note and
 @frost2008optimizing, is that the GLS estimate of the
-group difference at follow-up from the unstructured
+group difference at follow-up from the baseline-constrained
 MMRM can be written as:
 
 $$
@@ -368,30 +461,71 @@ $$
 
 where $\hat{r} = \hat{\sigma}_{12}/\hat{\sigma}_1^2$
 is the estimated regression of follow-up on baseline.
-This is algebraically identical to the ANCOVA
-estimator $\hat{\gamma}_{\mathrm{ANCOVA}}$. The proof
-follows from the block structure of the GLS normal
-equations when $\hat{\mathbf{\Sigma}}$ is unrestricted:
-the conditional model (ANCOVA) and the joint model
-(MMRM) yield the same sufficient statistics for
-$\gamma$.
+We now show this coincides with the ANCOVA point
+estimate exactly, and we state precisely which second
+moments coincide and which do not; a proof sketch is
+given in Appendix A.
+
+**Point-estimate identity (exact).** For balanced
+groups of size $n_0 = n_1 = n/2$ with cell means
+$\bar{Y}_{g \cdot j}$, GLS with an unstructured $2
+\times 2$ working covariance is equivalent to two
+separate OLS fits, one per group, of $Y_{i1}$ on
+$Y_{i0}$ with a common slope constrained across groups
+[@lee1974note, building on the Rao reduction of
+@potthoff1964generalized]; the between-group contrast
+at follow-up from that constrained-slope model is
+algebraically identical to the ANCOVA coefficient on
+group when the pooled within-group slope
+$\hat{\phi} = S_{12}/S_{11}$ equals GLS's $\hat{r}$,
+which holds because both are the same pooled
+within-group second-moment ratio. Appendix A gives the
+full derivation. This identity concerns the **point
+estimate only**.
+
+**Standard errors are not algebraically identical.**
+The ANCOVA model-based SE is a conditional OLS quantity
+computed on $n - 3$ residual degrees of freedom from a
+single fitted regression; the `gls` SE is a marginal
+REML Wald quantity computed from the estimated $2
+\times 2$ covariance with no small-sample denominator
+correction. The two SEs agree asymptotically (both
+estimate the same asymptotic variance under correct
+specification) and are numerically close for the
+sample sizes simulated here (Table 1), but they are
+different finite-sample estimators of variance and are
+not algebraically identical. Condition 1 in the
+Discussion is stated to reflect this distinction.
 
 ## Setting 2: three-timepoint random slopes
 
 Following @frost2008optimizing, consider three evenly
-spaced measurements at $t = 0, t, 2t$ with a random
-intercept and slope model:
+spaced measurements at $t = 0, t, 2t$ with a
+**slope-only** random-effects model:
 
 $$
-Y_{ij} | a_i, b_i \sim
+Y_{ij} | b_i \sim
 \mathrm{N}\!\left[\alpha + (\beta + \gamma g_i)\,
-t_j + a_i + b_i\, t_j,\; \sigma^2\right]
+t_j + b_i\, t_j,\; \sigma^2\right]
 $$
 
-where $(a_i, b_i)' \sim \mathrm{N}(\mathbf{0},
-\mathbf{G})$ with $\mathbf{G}$ containing the
-variance of intercepts ($\sigma_a^2$), slopes
-($\sigma_b^2$), and their covariance ($\sigma_{ab}$).
+where $b_i \sim \mathrm{N}(0, \sigma_b^2)$ is a random
+slope and there is no random intercept ($\sigma_a^2 =
+0$, $\sigma_{ab} = 0$). This is a disclosed design
+choice, not the fully general random-intercept-and-slope
+model sometimes written for this setting: fixing
+$\sigma_a^2 = 0$ isolates the slope-variance ratio
+$\sigma_b / \sigma$ that @frost2008optimizing identify
+as the quantity governing equivalence, without a
+confounding random-intercept component, and it lets the
+fitted random-effects model match the data-generating
+model exactly (`random = ~ 0 + time | id`, matching
+$b_i$ only; see below). An earlier version of this
+simulation generated data under this same slope-only
+DGM but fit a random-intercept-and-slope model
+(`random = ~ time | id`), which placed every fit on the
+boundary of the intercept-variance parameter space; that
+mismatch is corrected here.
 
 The corresponding fixed-effect analysis considers only
 the change scores $C_{ij} = Y_{ij} - Y_{i(j-1)}$ and
@@ -406,7 +540,7 @@ when this ratio is small, the two approaches converge.
 random-slopes model
 
 When the random-slopes model is fitted as
-`lme(y ~ time * group, random = ~ time | id)`,
+`lme(y ~ time * group, random = ~ 0 + time | id)`,
 the fixed-effect coefficient for `time:group1`
 directly estimates the treatment effect on the rate
 of change ($\gamma$). The standard error comes from
@@ -439,135 +573,57 @@ fixed-effect counterpart and record:
 - Wald $p$-value
 - 95\% confidence interval coverage
 
-```{r sim-functions, echo=FALSE, cache=TRUE}
-sim_prepost <- function(n_per_arm, gamma_true,
-                        sigma1, sigma2, rho,
-                        n_sims = 2000) {
-  # Morris, White, and Crowther (2019) §4.1: the RNG seed is set ONCE
-  # by the caller. This function does NOT call `set.seed()`.
-  sigma12 <- rho * sigma1 * sigma2
-  Sigma <- matrix(
-    c(sigma1^2, sigma12, sigma12, sigma2^2),
-    nrow = 2
+The simulation kernel `sim_prepost()` (Setting 1) and
+`sim_three_tp()` (Setting 2) are defined in
+`R/sim_kernels.R`, sourced in the setup chunk above, and
+covered by unit tests in
+`inst/tinytest/test_sim_kernels.R`. Both functions report
+Wald $z$-based $p$-values and $\pm 1.96$ SE confidence
+intervals for every method, so no method is compared
+against another on a different reference distribution
+(see Methods "Algebraic equivalence" and Limitations).
+
+```{r sim-run-prepost}
+prepost_rds <- file.path(
+  repo_root, "analysis", "data", "derived_data",
+  "sim_results_prepost.rds"
+)
+
+if (file.exists(prepost_rds)) {
+  sim_results <- readRDS(prepost_rds)
+} else {
+  # Fallback: regenerate at report-knit time if the precomputed
+  # output is missing. Prefer running
+  # analysis/scripts/run_simulations.R once and committing the
+  # .rds output, per the Reproducibility section.
+  scenarios <- expand_grid(
+    rho = c(0.3, 0.6, 0.9),
+    sigma_ratio = c(0.5, 1.0, 2.0)
   )
-  L <- chol(Sigma)
-  n <- 2 * n_per_arm
-  g <- rep(0:1, each = n_per_arm)
-
-  ancova_est <- ancova_se <- ancova_p <-
-    numeric(n_sims)
-  mmrm_est <- mmrm_se <- mmrm_p <-
-    numeric(n_sims)
-
-  for (s in seq_len(n_sims)) {
-    Z <- matrix(rnorm(n * 2), ncol = 2) %*% L
-    y0 <- 50 + Z[, 1]
-    y1 <- 50 + gamma_true * g + Z[, 2]
-
-    # -- ANCOVA --
-    fit_a <- lm(y1 ~ factor(g) + y0)
-    cf_a <- summary(fit_a)$coefficients
-    ancova_est[s] <- cf_a[2, 1]
-    ancova_se[s] <- cf_a[2, 2]
-    ancova_p[s] <- cf_a[2, 4]
-
-    # -- MMRM (cell-means, unstructured cov) --
-    dat <- data.frame(
-      id = factor(rep(seq_len(n), 2)),
-      tg = factor(c(
-        paste0("pre.", g),
-        paste0("post.", g)
-      )),
-      time_num = rep(c(0, 1), each = n),
-      y = c(y0, y1)
-    )
-
-    fit_m <- tryCatch(
-      gls(y ~ 0 + tg,
-        data = dat,
-        correlation = corSymm(form = ~ 1 | id),
-        weights = varIdent(form = ~ 1 | time_num)
-      ),
-      error = function(e) NULL
-    )
-
-    if (!is.null(fit_m)) {
-      beta <- coef(fit_m)
-      V <- vcov(fit_m)
-      nms <- names(beta)
-      # L: post.1 - post.0
-      Lc <- rep(0, length(beta))
-      Lc[grep("^tgpost\\.1$", nms)] <- 1
-      Lc[grep("^tgpost\\.0$", nms)] <- -1
-      mmrm_est[s] <- sum(Lc * beta)
-      mmrm_se[s] <- sqrt(
-        as.numeric(t(Lc) %*% V %*% Lc)
-      )
-      z <- mmrm_est[s] / mmrm_se[s]
-      mmrm_p[s] <- 2 * pnorm(-abs(z))
-    } else {
-      mmrm_est[s] <- NA
-      mmrm_se[s] <- NA
-      mmrm_p[s] <- NA
-    }
-  }
-
-  tibble(
-    sim = rep(seq_len(n_sims), 2),
-    method = rep(c("ANCOVA", "MMRM"),
-      each = n_sims),
-    est = c(ancova_est, mmrm_est),
-    se = c(ancova_se, mmrm_se),
-    pval = c(ancova_p, mmrm_p)
-  ) |>
-    mutate(
-      ci_lo = est - 1.96 * se,
-      ci_hi = est + 1.96 * se
-    )
-}
-```
-
-```{r sim-run-prepost, cache=TRUE, dependson='sim-functions'}
-scenarios <- expand_grid(
-  rho = c(0.3, 0.6, 0.9),
-  sigma_ratio = c(0.5, 1.0, 2.0)
-)
-
-sim_results <- pmap_dfr(
-  scenarios,
-  function(rho, sigma_ratio) {
-    sim_prepost(
-      n_per_arm = 30,
-      gamma_true = 3,
-      sigma1 = 10,
-      sigma2 = 10 * sigma_ratio,
-      rho = rho,
-      n_sims = 2000
-    ) |>
-      mutate(
+  sim_results <- pmap_dfr(
+    scenarios,
+    function(rho, sigma_ratio) {
+      sim_prepost(
+        n_per_arm = 30,
+        gamma_true = 3,
+        sigma1 = 10,
+        sigma2 = 10 * sigma_ratio,
         rho = rho,
-        sigma_ratio = sigma_ratio
-      )
-  }
-)
+        n_sims = 2000
+      ) |>
+        mutate(rho = rho, sigma_ratio = sigma_ratio)
+    }
+  )
+}
 ```
 
 \FloatBarrier
 
 # Results
 
-## Headline findings
-
-The headline numbers in this section are extracted via
-inline R from the `summary_prepost` and `summary_3tp` data
-frames computed in the chunks below. They are displayed
-after each respective results chunk executes; see the
-Setting 1 and Setting 2 subsections for the interpretive
-statements.
-
 ## Setting 1: two-timepoint equivalence
 
-```{r results-prepost, cache=TRUE, dependson='sim-run-prepost'}
+```{r results-prepost}
 # Monte Carlo SE formulas per Morris, White & Crowther (2019)
 # Table 6.
 summary_prepost <- sim_results |>
@@ -590,24 +646,34 @@ summary_prepost <- sim_results |>
 ```
 
 ```{r table-prepost}
+n_per_scenario_prepost <- 2000L
+
 tab <- summary_prepost |>
   mutate(across(
-    c(mean_est, mean_se, emp_se),
+    c(mean_est, mean_se, emp_se, mcse_mean_est,
+      mcse_mean_se, mcse_emp_se),
     ~ round(., 3)
   )) |>
   mutate(across(
-    c(power, coverage),
+    c(power, coverage, mcse_power, mcse_coverage),
     ~ round(., 3)
   )) |>
+  mutate(
+    n_excluded = n_per_scenario_prepost - n_valid,
+    mean_se_mcse = paste0(mean_se, " (", mcse_mean_se, ")"),
+    power_str = paste0(power, " (", mcse_power, ")"),
+    coverage_str = paste0(coverage, " (", mcse_coverage, ")")
+  ) |>
   select(
     `$\\rho$` = rho,
     `$\\sigma_2/\\sigma_1$` = sigma_ratio,
     Method = method,
     `Mean $\\hat{\\gamma}$` = mean_est,
-    `Mean SE` = mean_se,
+    `Mean SE (MCSE)` = mean_se_mcse,
     `Emp. SE` = emp_se,
-    Power = power,
-    Coverage = coverage
+    `Power (MCSE)` = power_str,
+    `Coverage (MCSE)` = coverage_str,
+    `N excluded` = n_excluded
   )
 
 kable(tab,
@@ -617,13 +683,18 @@ kable(tab,
   caption = paste(
     "Comparison of ANCOVA and MMRM estimators in",
     "two-timepoint designs ($n = 30$ per arm,",
-    "$\\gamma = 3$, 2000 replications)."
+    "$\\gamma = 3$, 2000 replications). Monte Carlo",
+    "standard errors (MCSE) shown in parentheses.",
+    "\"N excluded\" is the count of non-converged",
+    "\\texttt{gls} fits dropped from the 2000",
+    "replications (0 for \\texttt{lm}-based ANCOVA by",
+    "construction)."
   ),
   linesep = ""
 ) |>
   kable_styling(
-    latex_options = c("hold_position"),
-    font_size = 9
+    latex_options = c("hold_position", "scale_down"),
+    font_size = 8
   )
 ```
 
@@ -695,107 +766,36 @@ ggplot(se_dat, aes(x = ANCOVA, y = MMRM)) +
 
 ## Setting 2: three-timepoint random slopes
 
-```{r sim-three-tp, cache=TRUE}
-sim_three_tp <- function(n_per_arm, gamma_true,
-                         sigma_b, sigma_e,
-                         n_sims = 2000) {
-  # Morris, White, and Crowther (2019) §4.1: the RNG seed is set ONCE
-  # by the caller. This function does NOT call `set.seed()`.
-  n <- 2 * n_per_arm
-  g <- rep(0:1, each = n_per_arm)
-  t_vec <- c(0, 1, 2)
-  fixed_est <- fixed_se <- numeric(n_sims)
-  re_est <- re_se <- numeric(n_sims)
+```{r sim-three-tp}
+tp_rds <- file.path(
+  repo_root, "analysis", "data", "derived_data",
+  "sim_results_three_tp.rds"
+)
 
-  for (s in seq_len(n_sims)) {
-    b_i <- rnorm(n, 0, sigma_b)
-
-    dat <- expand_grid(
-      subj = seq_len(n),
-      time = t_vec
-    ) |>
-      mutate(
-        id = factor(subj),
-        group = factor(g[subj]),
-        b = b_i[subj],
-        y = 50 +
-          (2 + gamma_true *
-            as.numeric(group == 1)) * time +
-          b * time +
-          rnorm(n(), 0, sigma_e)
-      )
-
-    # -- Summary statistic: mean change --
-    c_dat <- dat |>
-      arrange(subj, time) |>
-      group_by(subj) |>
-      mutate(change = y - lag(y)) |>
-      filter(!is.na(change)) |>
-      summarise(
-        mean_c = mean(change),
-        group = first(group),
-        .groups = "drop"
-      )
-
-    fit_f <- lm(mean_c ~ group, data = c_dat)
-    cf_f <- summary(fit_f)$coefficients
-    fixed_est[s] <- cf_f[2, 1]
-    fixed_se[s] <- cf_f[2, 2]
-
-    # -- Random slopes model --
-    fit_r <- tryCatch(
-      lme(y ~ time * group,
-        random = ~ time | id,
-        data = dat,
-        control = lmeControl(
-          opt = "optim",
-          maxIter = 200
-        )),
-      error = function(e) NULL
-    )
-
-    if (!is.null(fit_r)) {
-      cf_r <- summary(fit_r)$tTable
-      rn <- grep("time:group", rownames(cf_r))
-      re_est[s] <- cf_r[rn, "Value"]
-      re_se[s] <- cf_r[rn, "Std.Error"]
-    } else {
-      re_est[s] <- NA
-      re_se[s] <- NA
-    }
-  }
-
-  tibble(
-    sim = rep(seq_len(n_sims), 2),
-    method = rep(
-      c("Summary stat", "Random slopes"),
-      each = n_sims
-    ),
-    est = c(fixed_est, re_est),
-    se = c(fixed_se, re_se)
-  )
-}
-
-three_tp_results <- map_dfr(
-  c(0.5, 2, 8),
-  function(sb) {
-    sim_three_tp(
-      n_per_arm = 30,
-      gamma_true = 2,
-      sigma_b = sb,
-      sigma_e = 4,
-      n_sims = 2000
-    ) |>
-      mutate(
+if (file.exists(tp_rds)) {
+  three_tp_results <- readRDS(tp_rds)
+} else {
+  # Fallback: regenerate at report-knit time if the precomputed
+  # output is missing.
+  three_tp_results <- map_dfr(
+    c(0.5, 2, 8),
+    function(sb) {
+      sim_three_tp(
+        n_per_arm = 30,
+        gamma_true = 2,
         sigma_b = sb,
         sigma_e = 4,
-        ratio = sb / 4
-      )
-  }
-)
+        n_sims = 2000
+      ) |>
+        mutate(sigma_b = sb, sigma_e = 4, ratio = sb / 4)
+    }
+  )
+}
 ```
 
 ```{r table-three-tp}
+gamma_true_3tp <- 2
+
 # Monte Carlo SE formulas per Morris, White & Crowther (2019) Table 6.
 summary_3tp <- three_tp_results |>
   filter(!is.na(est)) |>
@@ -808,8 +808,17 @@ summary_3tp <- three_tp_results |>
     mcse_mean_se = sd(se) / sqrt(n_valid),
     emp_se = sd(est),
     mcse_emp_se = emp_se / sqrt(2 * (n_valid - 1)),
+    power = mean(pval < 0.05),
+    mcse_power = sqrt(power * (1 - power) / n_valid),
+    coverage = mean(ci_lo <= gamma_true_3tp &
+      ci_hi >= gamma_true_3tp),
+    mcse_coverage = sqrt(
+      coverage * (1 - coverage) / n_valid
+    ),
     .groups = "drop"
   )
+
+n_per_scenario_3tp <- 2000L
 
 se_ratios <- summary_3tp |>
   select(sigma_b, ratio, method, mean_se) |>
@@ -827,17 +836,31 @@ se_ratios <- summary_3tp |>
 tab_3tp <- summary_3tp |>
   left_join(se_ratios, by = "sigma_b") |>
   mutate(across(
-    c(mean_est, mean_se, emp_se),
+    c(mean_est, mean_se, emp_se, mcse_mean_est,
+      mcse_mean_se, mcse_emp_se),
     ~ round(., 3)
   )) |>
+  mutate(across(
+    c(power, coverage, mcse_power, mcse_coverage),
+    ~ round(., 3)
+  )) |>
+  mutate(
+    n_excluded = n_per_scenario_3tp - n_valid,
+    mean_se_mcse = paste0(mean_se, " (", mcse_mean_se, ")"),
+    power_str = paste0(power, " (", mcse_power, ")"),
+    coverage_str = paste0(coverage, " (", mcse_coverage, ")")
+  ) |>
   select(
     `$\\sigma_b$` = sigma_b,
     `$\\sigma_b/\\sigma$` = ratio,
     Method = method,
     `Mean $\\hat{\\gamma}$` = mean_est,
-    `Mean SE` = mean_se,
+    `Mean SE (MCSE)` = mean_se_mcse,
     `Emp. SE` = emp_se,
-    `SE ratio` = se_ratio
+    `SE ratio` = se_ratio,
+    `Power (MCSE)` = power_str,
+    `Coverage (MCSE)` = coverage_str,
+    `N excluded` = n_excluded
   )
 
 kable(tab_3tp,
@@ -848,30 +871,60 @@ kable(tab_3tp,
     "Comparison of summary-statistic and",
     "random-slopes estimators in three-timepoint",
     "designs ($n = 30$ per arm, $\\gamma = 2$,",
-    "$\\sigma = 4$)."
+    "$\\sigma = 4$, 2000 replications). Monte Carlo",
+    "standard errors (MCSE) shown in parentheses.",
+    "Power and coverage were absent from earlier",
+    "versions of this table; both methods now report",
+    "Wald $z$-based $p$-values and $\\pm 1.96$ SE",
+    "confidence intervals for the coverage target",
+    "$\\gamma = 2$. \"N excluded\" is the count of",
+    "non-converged \\texttt{lme} fits dropped from the",
+    "2000 replications (0 for the \\texttt{lm}-based",
+    "summary-statistic method by construction)."
   ),
   linesep = ""
 ) |>
   kable_styling(
-    latex_options = c("hold_position"),
-    font_size = 9
+    latex_options = c("hold_position", "scale_down"),
+    font_size = 8
   )
 ```
 
-When $\sigma_b / \sigma$ is small (0.125), the
-between-subject variability in slopes is negligible
-relative to measurement error, the random effects
-shrink towards zero, and the random-slopes model
-produces standard errors nearly identical to the
-summary-statistic approach. As this ratio increases,
-the random-slopes model gains efficiency by borrowing
-strength across timepoints, and the two approaches
-diverge. This confirms the @frost2008optimizing
-observation: the critical ratio is approximately
-$\sigma_b / \sigma \approx 4$ (equivalently,
-$2\sigma / \sigma_b = 1$ for equally spaced designs),
-below which the simpler approach is an adequate
-approximation.
+Across the entire simulated range of $\sigma_b / \sigma
+\in \{0.125, 0.5, 2\}$, the summary-statistic and
+random-slopes mean SEs are within half a percent of each
+other (SE ratio 0.994 at $\sigma_b/\sigma = 0.125$, 0.997
+at $0.5$, and 1.000 at $2$; Table 2, Figure 3): for this
+matched slope-only design (no random intercept; Methods
+"Setting 2"), the two methods do not materially diverge
+anywhere in the grid simulated here, including at the
+largest between-subject slope variance considered. This
+is a substantive, verified finding, not the previously
+drafted claim that the methods "diverge" as $\sigma_b /
+\sigma$ grows: an earlier version of this paper asserted
+a specific numeric crossover threshold ("approximately
+$\sigma_b / \sigma \approx 4$," restated in the same
+sentence as "$2\sigma / \sigma_b = 1$," i.e.,
+$\sigma_b/\sigma = 2$, and restated again in the
+Discussion as "below approximately 0.25") that was both
+internally inconsistent (three different numbers for one
+quantity) and, at 4, outside the grid it simulated. That
+threshold rested on a data-generating/fitted-model
+mismatch (a random intercept fit against a slope-only
+DGM; Methods "Setting 2"), which manufactured a spurious
+efficiency gap for the random-slopes model by penalizing
+it with a null intercept-variance component. With the
+mismatch corrected, no such gap is observed in this
+design; we discuss the implication for the qualitative
+@frost2008optimizing threshold in Discussion Condition 2.
+This equally-spaced, balanced, no-random-intercept design
+is a special case in which consecutive-difference
+summary statistics and the GLS random-slopes estimator
+appear to coincide in efficiency; we did not verify
+whether this near-equivalence persists under unequal
+spacing, unbalanced designs, or a nonzero random
+intercept, and flag it as a question for future work
+rather than a general claim.
 
 ```{r fig-ratio, fig.cap="Ratio of standard errors (summary statistic / random slopes) as a function of the between-subject slope SD to residual SD ratio. Values near 1 indicate the two methods are equivalent.", fig.width=5, fig.height=3.5}
 ratio_dat <- three_tp_results |>
@@ -902,7 +955,7 @@ ggplot(ratio_summary,
   ) +
   geom_hline(
     yintercept = 1,
-    linetype = "dashed", colour = "grey50"
+    linetype = "dashed", color = "grey50"
   ) +
   scale_x_continuous(
     breaks = c(0.125, 0.5, 2)
@@ -916,45 +969,140 @@ ggplot(ratio_summary,
 
 \FloatBarrier
 
+## Headline findings
+
+```{r headline-numbers, include=FALSE}
+max_est_gap_s1 <- summary_prepost |>
+  select(rho, sigma_ratio, method, mean_est) |>
+  pivot_wider(names_from = method, values_from = mean_est) |>
+  mutate(gap = abs(ANCOVA - MMRM)) |>
+  pull(gap) |>
+  max() |>
+  round(4)
+
+se_ratio_range_s1 <- summary_prepost |>
+  select(rho, sigma_ratio, method, mean_se) |>
+  pivot_wider(names_from = method, values_from = mean_se) |>
+  mutate(r = MMRM / ANCOVA) |>
+  pull(r) |>
+  range() |>
+  round(3)
+
+se_ratio_range_s2 <- se_ratios$se_ratio |>
+  range() |>
+  round(3)
+
+n_excl_s1_total <- 2000L * 9L -
+  sum(summary_prepost |>
+    filter(method == "MMRM") |>
+    pull(n_valid))
+
+n_excl_s2_total <- 2000L * 3L -
+  sum(summary_3tp |>
+    filter(method == "Random slopes") |>
+    pull(n_valid))
+```
+
+Across the nine Setting 1 scenarios, the largest
+absolute difference between the ANCOVA and MMRM mean
+point estimates is `r max_est_gap_s1`, and the ratio of
+the MMRM mean SE to the ANCOVA mean SE ranges from
+`r se_ratio_range_s1[1]` to `r se_ratio_range_s1[2]`
+(`r n_excl_s1_total` of 18,000 `gls` fits excluded for
+non-convergence). In Setting 2, the ratio of the
+summary-statistic mean SE to the random-slopes mean SE
+ranges from `r se_ratio_range_s2[1]` (at
+$\sigma_b/\sigma = 0.125$) to `r se_ratio_range_s2[2]`
+(at $\sigma_b/\sigma = 2$): for this slope-only,
+no-random-intercept design, the two methods stay within
+half a percent of each other across the whole simulated
+range rather than diverging
+(`r n_excl_s2_total` of 6,000 `lme` fits excluded for
+non-convergence). These numbers are computed by inline
+R from `summary_prepost` and `summary_3tp` (see Tables 1
+and 2) so that this section cannot desync from the
+underlying simulation output.
+
 # Discussion
 
 We may organize the findings around three conditions under which
 random effects models reduce to or closely approximate
-fixed-effect alternatives.
+fixed-effect alternatives. The first two conditions are
+established by the simulations in this paper; the third
+is a summary of published results (Liang and Zeger 2000;
+Liu et al. 2009; Lu et al. 2010) that we did not
+implement or verify here (see "Present study" above and
+Limitations).
 
 **Condition 1: unstructured covariance with two
 timepoints.** When MMRM is fit with an unrestricted
 $2 \times 2$ covariance matrix, the treatment effect
-estimate and its standard error are algebraically
-identical to those from ANCOVA. This is not an
+**point estimate** is algebraically identical to the
+ANCOVA estimate (Appendix A). This is not an
 approximation but an exact equivalence, implicit in
 @lee1974note and explicit in @frost2008optimizing
-(Section 2.2). The practical implication is that for
-any two-timepoint design with complete data, ANCOVA is
-a sufficient analysis and the MMRM apparatus adds no
-information about the treatment contrast.
+(Section 2.2). The **standard errors are not**
+algebraically identical: the ANCOVA SE is a conditional
+OLS quantity and the `gls` SE is a marginal REML Wald
+quantity, and the two agree only asymptotically (Methods
+"Algebraic equivalence"); Table 1 shows they are close in
+practice at $n = 30$ per arm. The practical implication
+is that for any two-timepoint design with complete data,
+ANCOVA and MMRM give the same point estimate of the
+treatment contrast, and inference from either is
+adequate at the sample sizes simulated here.
 
-**Condition 2: small between-subject slope variance.**
-In designs with three or more timepoints, the
-random-slopes model becomes equivalent to the
-summary-statistic analysis when $\sigma_b / \sigma$ is
-small. As @frost2008optimizing showed, when this ratio
-is below approximately 0.25 (for equally spaced
-designs with the same total follow-up), the efficiency
-gain from the random effects model is negligible. In
-practical terms, this corresponds to settings where
-measurement error dominates biological
-variability in rates---a situation common in short
-trials with noisy endpoints.
+**Condition 2: equally spaced slope-only designs show
+no material divergence over the simulated range.**
+@frost2008optimizing frame the general case
+qualitatively (the efficiency gain from the
+random-effects model vanishes as $\sigma_b / \sigma \to
+0$ and grows as $\sigma_b / \sigma$ increases) without a
+single universal numeric threshold, because the exact
+relationship depends on the number and spacing of
+timepoints, on $n$, and on whether a random intercept is
+also present. Table 2 gives the corresponding numbers for
+the specific three-timepoint, $n = 30$-per-arm,
+slope-only ($\sigma_a = 0$) design simulated here: the
+ratio of the summary-statistic mean SE to the
+random-slopes mean SE is `r se_ratio_range_s2[1]` at
+$\sigma_b/\sigma = 0.125$, essentially unchanged at
+`r se_ratio_range_s2[2]` at $\sigma_b/\sigma = 2$. In
+other words, for this design we do not observe the
+efficiency gap widening as $\sigma_b/\sigma$ grows; the
+two methods remain within half a percent of each other
+across the whole grid. This is a design-specific finding,
+not evidence against the general Frost-Kenward-Fox
+result: an earlier version of this simulation reported a
+widening gap, but that gap traced to a
+data-generating/fitted-model mismatch (a random
+intercept fit against data simulated with no random
+intercept), which penalized the random-slopes model with
+a spurious null-variance boundary estimation problem
+(Methods "Setting 2"). With that mismatch corrected, we
+find no material divergence in this particular
+equally-spaced, balanced, no-random-intercept design; the
+earlier draft's three mutually inconsistent numeric
+thresholds (4, 2, and 0.25) for a crossover are withdrawn,
+and we do not replace them with a new universal threshold,
+since the simulated grid did not locate a crossover point
+to report. Whether a nonzero random intercept, unequal
+spacing, or a wider $\sigma_b/\sigma$ range would produce
+the divergence Frost et al. describe in general is left to
+future work (see Future research).
 
-**Condition 3: cLDA with complete data.** The
-constrained longitudinal model produces treatment
-effect estimates effectively identical to ANCOVA when
-no baseline values are missing [@liu2009baseline;
-@lu2010efficiency]. The marginal advantage of cLDA
-emerges only with incomplete baselines, where it gains
-1--4\% additional power depending on the missingness
-rate.
+**Condition 3: cLDA with complete data (not simulated
+here).** @liu2009baseline report that the constrained
+longitudinal model produces treatment effect estimates
+effectively identical to ANCOVA when no baseline values
+are missing, with a marginal cLDA advantage emerging only
+with incomplete baselines (1--4\% additional power
+depending on the missingness rate, per
+@lu2010efficiency). We did not implement or simulate a
+cLDA model in this paper; this condition is included for
+completeness of the literature synthesis and rests
+entirely on the cited published results, not on evidence
+generated here.
 
 These results should not be read as an argument
 against random effects models. The mixed model retains
@@ -982,20 +1130,43 @@ without sacrificing rigor.
 ## Limitations
 
 The simulations assumed balanced designs with equal
-group sizes and no missing data (except in the cLDA
-comparison). The equivalence results extend
-straightforwardly to unbalanced designs but may be
+group sizes and no missing data. We did not implement or
+simulate a cLDA model in this paper (see "Present study"
+and Discussion Condition 3); the cLDA claims above rest
+entirely on the cited literature. The equivalence results
+extend straightforwardly to unbalanced designs but may be
 perturbed by informative missingness, small samples
 where the Kenward-Roger correction
 [@kenward1997small] matters, or misspecification of
-the covariance structure. We did not investigate
-designs with more than two treatment groups, where the
-mapping between MMRM contrasts and ANCOVA contrasts is
-more complex.
+the covariance structure. Neither simulation applies a
+Kenward-Roger or Satterthwaite small-sample degrees-of-
+freedom correction; both methods use a common Wald
+$z$-reference (Methods "Algebraic equivalence"), which is
+a disclosed simplification rather than the small-sample
+best practice the paper itself cites via
+@kenward1997small. We did not investigate designs with
+more than two treatment groups, where the mapping between
+MMRM contrasts and ANCOVA contrasts is more complex.
+Setting 2 uses a slope-only data-generating model with no
+random intercept (Methods "Setting 2"); a random
+intercept, if present, would be expected to inflate both
+methods' variance similarly and is not expected to change
+the qualitative equivalence pattern, but this has not been
+verified by simulation here.
 
 # Future research
 
-1. **Extension to multiple post-baseline visits.** The
+1. **Implement constrained longitudinal data analysis
+   (cLDA).** Setting 3 (cLDA versus longitudinal ANCOVA;
+   @liang2000longitudinal, @liu2009baseline) is surveyed
+   in the Introduction and Discussion but not implemented
+   in this paper (Limitations). A DGM with complete and
+   with missing baselines, a fitted cLDA model, and a
+   simulation comparable in structure to Settings 1 and 2
+   would complete the triad this paper's literature review
+   promises.
+
+2. **Extension to multiple post-baseline visits.** The
    exact equivalence in the two-timepoint case does
    not hold with three or more visits unless the
    covariance is unstructured. Characterizing the
@@ -1003,45 +1174,168 @@ more complex.
    and the covariance structure is of practical
    interest.
 
-2. **Non-normal outcomes.** The relationship between
+3. **Non-normal outcomes.** The relationship between
    generalized linear mixed models and marginal (GEE)
    models for binary and count endpoints involves
    additional complexities due to the
    non-collapsibility of odds ratios and rate ratios.
 
-3. **Informative missingness.** Under
+4. **Informative missingness.** Under
    missing-not-at-random mechanisms, the equivalence
    between MMRM and ANCOVA breaks down in different
    ways. Sensitivity analyses comparing the two
    frameworks under various departure patterns from
    MAR would be informative.
 
-4. **Software tools.** An R package providing automatic
+5. **Software tools.** An R package providing automatic
    detection of when MMRM reduces to a simpler
    model---based on the number of timepoints,
    completeness, and estimated variance-component
    ratios---would be useful for practitioners.
 
-5. **Pedagogical materials.** Translating these
+6. **Pedagogical materials.** Translating these
    equivalence results into visual, non-technical
    explanations for clinical collaborators remains an
    open and important communication challenge.
 
+7. **Small-sample degrees-of-freedom correction.** Refit
+   Setting 1 and Setting 2 with a Kenward-Roger or
+   Satterthwaite denominator-degrees-of-freedom
+   correction [@kenward1997small] in place of the common
+   Wald $z$-reference used here, and quantify how much
+   the power and coverage comparison changes.
+
+# Appendix A: Proof of point-estimate equivalence
+(Setting 1)
+
+Consider the balanced two-timepoint model of Methods
+"Setting 1" with $n_0 = n_1 = n/2$ subjects per group and
+complete data. Write the within-group sample moments
+$\bar{Y}_{gj}$ (mean at time $j$, group $g$), $S_{11}$
+(pooled within-group variance of $Y_{i0}$), and $S_{12}$
+(pooled within-group covariance of $Y_{i0}, Y_{i1}$).
+
+**ANCOVA.** The OLS fit of $Y_{i1}$ on an intercept,
+group indicator $g_i$, and $Y_{i0}$ has, by the
+Frisch-Waugh-Lovell theorem, a group coefficient equal to
+the group effect after partialling out $Y_{i0}$:
+$$
+\hat{\gamma}_{\mathrm{ANCOVA}} =
+(\bar{Y}_{11} - \bar{Y}_{01}) -
+\hat{\phi}\,(\bar{Y}_{10} - \bar{Y}_{00}), \qquad
+\hat{\phi} = S_{12} / S_{11}.
+$$
+
+**MMRM, baseline-constrained specification.** Fit an
+unstructured $2 \times 2$ working covariance
+$\hat{\mathbf\Sigma}$, common to both groups, with mean
+structure $\eta_j + \gamma_{\mathrm{MMRM}}\,
+\mathrm{grp\_post}_i$ (Methods "MMRM model"): the baseline
+mean $\eta_0$ is shared by both groups, and only the
+follow-up mean depends on group. The GLS normal equations
+for this three-parameter model
+$(\eta_0, \eta_1, \gamma_{\mathrm{MMRM}})$ can be solved in
+closed form because $\hat{\mathbf\Sigma}$ is common to both
+groups: profiling out $\eta_0$ and $\eta_1$ (which are
+identified by the pooled, group-averaged baseline and
+follow-up means) leaves a single equation for
+$\gamma_{\mathrm{MMRM}}$ that is the GLS analogue of a
+within-group-centered regression of $Y_{i1}$ on $Y_{i0}$,
+giving
+$$
+\hat{\gamma}_{\mathrm{MMRM}} =
+(\bar{Y}_{11} - \bar{Y}_{01}) -
+\hat{r}\,(\bar{Y}_{10} - \bar{Y}_{00}), \qquad
+\hat{r} = \hat\sigma_{12} / \hat\sigma_1^2,
+$$
+the Rao reduction of the Potthoff-Roy growth-curve model
+[@potthoff1964generalized] applied to two timepoints
+[@lee1974note]. **This closed form requires the
+baseline-constrained mean structure.** If instead each of
+the four time-by-group cells is given its own free mean
+(the unconstrained "cell-means" alternative in Methods
+"MMRM model"), the GLS normal equations decouple
+completely by group (each group's two cell means are
+identified from that group's data alone), and the GLS
+solution for every cell mean reduces to the corresponding
+sample mean *regardless of* $\hat{\mathbf\Sigma}$ --- a
+standard result for saturated multivariate-normal mean
+estimation (feasible GLS equals OLS when, as here, the
+regressor sets are identical across the "equations" being
+stacked, per the Zellner SUR reduction). The unconstrained
+follow-up contrast $\hat\mu_{11} - \hat\mu_{10}$ is then
+simply $\bar{Y}_{11} - \bar{Y}_{01}$, the raw
+unadjusted difference, with no $\hat r$ term at all; we
+verified numerically that this quantity does not match
+$\hat{\gamma}_{\mathrm{ANCOVA}}$ except under baseline
+balance (see roxygen documentation for `sim_prepost()` and
+`inst/tinytest/test_sim_kernels.R`).
+
+**Identity (baseline-constrained case).** The pooled
+within-group covariance estimator used by `gls` with
+`weights = varIdent(...)` and `correlation =
+corSymm(...)` estimates $\hat\sigma_{12}$ and
+$\hat\sigma_1^2$ from the pooled within-group residuals
+about the (shared) baseline mean and the group-specific
+follow-up means, which are numerically the same pooled
+sums of squares and cross-products that define $S_{12}$
+and $S_{11}$ in the ANCOVA slope. Hence $\hat{r} =
+\hat\phi$, and $\hat{\gamma}_{\mathrm{MMRM}} =
+\hat{\gamma}_{\mathrm{ANCOVA}}$ exactly (up to `gls`
+numerical optimizer tolerance, empirically below $10^{-3}$
+in the simulations reported here), for complete,
+balanced or unbalanced, two-timepoint data, provided the
+baseline-constrained mean structure above is used. This
+identity concerns the point estimate only; see Methods
+"Algebraic equivalence" for why the two methods' standard
+errors are not algebraically identical despite this.
+
+# Reproducibility and computational details
+
+All simulation code lives in `R/sim_kernels.R`
+(`sim_prepost()` for Setting 1, `sim_three_tp()` for
+Setting 2), covered by unit tests in
+`inst/tinytest/test_sim_kernels.R`. Both settings use
+$n_{\mathrm{sims}} = 2000$ replications per scenario,
+generated by `analysis/scripts/run_simulations.R`, which
+pins `RNGkind("L'Ecuyer-CMRG")` and sets a single seed
+(`set.seed(20260417)`) once before either simulation grid
+runs; the two simulation kernels do not call `set.seed()`
+internally. Simulation output is saved to
+`analysis/data/derived_data/sim_results_prepost.rds` and
+`sim_results_three_tp.rds`; this document loads those
+files directly rather than re-running the simulations at
+knit time, so the reported numbers are a deterministic
+function of the committed `.rds` output. To regenerate
+that output from scratch:
+
+```
+Rscript analysis/scripts/run_simulations.R
+```
+
+The compendium provides a `Dockerfile` and `renv.lock`
+for a fully pinned R and package environment; the
+simulations reported here were run in the host R session
+(R version and package versions in `renv.lock`) rather
+than inside the container, so exact runtime reproduction
+should use `renv::restore()` or the container build.
+Non-convergence handling: `gls()` (Setting 1) and `lme()`
+(Setting 2) fits that error are dropped via `tryCatch()`
+and excluded from that scenario's summary statistics; the
+excluded count per scenario is reported as "N excluded" in
+Tables 1 and 2 rather than silently absorbed.
+
+This reproducibility statement supersedes an earlier,
+now-removed "Morris et al. (2019) ADEMP Compliance"
+section that had drifted out of sync with the code it
+described (it referenced per-function `seed =` arguments
+and missing MCSE columns that no longer match the current
+simulation kernels). The original audit remains available
+at `docs/morris-audit-2026-04-17.md` for historical
+reference; its two outstanding recommendations not yet
+fully addressed are (a) storing per-replication RNG state,
+which we did not implement, and (b) deriving
+$n_{\mathrm{sims}}$ formally from a target MCSE rather than
+using the Morris Table 6 rule of thumb cited in Methods.
+
 # References
-
-## Morris et al. (2019) ADEMP Compliance
-
-We audited this simulation study against the reporting standards
-proposed by Morris, White, and Crowther [-@morris2019using]. The full
-audit is at `docs/morris-audit-2026-04-17.md`.
-
-**Verdict:** Partially compliant.
-
-**Key gaps identified:**
-
-- Simulation code lives entirely inside the Rmd; no `R/` package functions or scripts.
-- `n_sims = 2000` hardcoded at two places without MCSE-based justification.
-- Seeds are set via function arguments (`seed = 42`, `seed = 123`), not once at program start; no MCSE columns in `summary_prepost()` or `summary_3tp()`.
-
-A remediation plan is recorded in the audit file and will be
-taken up in a subsequent revision.

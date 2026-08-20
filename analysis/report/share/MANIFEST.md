@@ -5,3 +5,4 @@
 | Staged PDF | Source | Version | Rendered |
 |---|---|---|---|
 | `report-2026-08-15-1301-e768e47-wip.pdf` | `~/prj/res/18-mmrm-vs-lm-simple/mmrmlm/analysis/report/report.Rmd` | `e768e47-wip` | 2026-08-15 13:01 PDT |
+| `report-2026-08-20-1351-a2220a1-wip.pdf` | `~/prj/res/18-mmrm-vs-lm-simple/mmrmlm/analysis/report/report.Rmd` | `a2220a1-wip` | 2026-08-20 13:51 PDT |
