@@ -8,15 +8,15 @@ suppressMessages({
   library(purrr)
 })
 
-pkg_root <- (function() {
-  d <- normalizePath(getwd())
-  while (!file.exists(file.path(d, "DESCRIPTION")) &&
-    d != dirname(d)) {
-    d <- dirname(d)
-  }
-  d
-})()
-source(file.path(pkg_root, "R", "sim_kernels.R"))
+# sim_prepost() and sim_three_tp() are unexported functions defined
+# in R/sim_kernels.R; tinytest::test_package()/run_test_dir() already
+# make unexported package functions available in this file's
+# evaluation environment, so no explicit source() is needed. The
+# previous pkg_root-walk-and-source() approach broke under R CMD
+# check: check runs tests against the *installed* package tree,
+# which never contains R/*.R (installed packages ship a serialized
+# lazy-load database, not the original source files), so the source()
+# call failed with "No such file or directory" and errored the suite.
 
 RNGkind("L'Ecuyer-CMRG")
 set.seed(20260819)
