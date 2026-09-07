@@ -32,29 +32,29 @@ knit: (function(input, ...) { d <- dirname(input); while (!file.exists(file.path
 abstract: |
   Mixed models for repeated measures (MMRM) are the default
   primary analysis for continuous longitudinal endpoints in
-  clinical trials, but their variance-component machinery is
-  often opaque to collaborators. We synthesize and verify, by
+  clinical trials. However, their variance-component machinery
+  is often opaque to collaborators. We synthesize and verify, by
   Monte Carlo simulation, two settings in which a random-effects
   or joint model reduces to a simpler fixed-effect analysis. In
   a two-timepoint pre-post design with complete data, an
   unstructured-covariance MMRM and an ANCOVA conditioning on
   baseline yield algebraically identical treatment-effect point
-  estimates; we give a short proof and confirm it by simulation
+  estimates. We give a short proof and confirm it by simulation
   across a $3 \times 3$ grid of correlation and variance-ratio
   values. In a three-timepoint design with a slope-only random
-  effect and no random intercept, a per-subject mean-change
-  estimator remains within half a percent of a random-slopes
-  linear mixed model's standard error across the full simulated
-  range of between-subject slope variability, a design-specific
-  finding we contrast with an earlier, non-reproducible version of
-  this simulation that reported divergence traceable to a
-  data-generating/fitted-model mismatch. We report both settings
-  under a common Wald reference distribution with Monte Carlo
-  standard
-  errors per Morris, White, and Crowther (2019), and we state
-  explicitly the conditions under which the simpler analysis is
-  exact, approximate, or inadequate. This paper does not claim new
-  theory; its contribution is a single accessible account, with
+  effect and no random intercept, we show that a per-subject
+  mean-change estimator remains within half a percent of a
+  random-slopes linear mixed model's standard error across the
+  full simulated range of between-subject slope variability. This
+  is a design-specific finding, and we contrast it with an
+  earlier, non-reproducible version of this simulation that
+  reported divergence traceable to a data-generating/fitted-model
+  mismatch. We report both settings under a common Wald reference
+  distribution with Monte Carlo standard errors per Morris,
+  White, and Crowther (2019), and we state explicitly the
+  conditions under which the simpler analysis is exact,
+  approximate, or inadequate. This paper does not claim new
+  theory. Its contribution is a single accessible account, with
   simulation-verified thresholds and decision guidance, for the
   applied statistician deciding when the mixed-model apparatus
   earns its complexity.
